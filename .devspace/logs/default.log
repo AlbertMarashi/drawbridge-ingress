@@ -1,0 +1,188 @@
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-10T22:56:02+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-10T22:56:02+10:30"}
+{"level":"fatal","msg":"convert config: Error loading config: yaml: unmarshal errors:\n  line 2: field ingress-image not found in type latest.DeploymentConfig","time":"2022-01-10T22:56:03+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-10T22:56:28+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-10T22:56:28+10:30"}
+{"level":"fatal","msg":"convert config: Error loading config: yaml: unmarshal errors:\n  line 2: field ingress-image not found in type latest.DeploymentConfig","time":"2022-01-10T22:56:28+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-10T22:56:52+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-10T22:56:52+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-10T22:56:53+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-10T22:56:57+10:30"}
+{"level":"info","msg":"Rebuild image  because tag is missing","time":"2022-01-10T22:57:00+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:XdQmLPR' with engine 'buildkit'","time":"2022-01-10T22:57:00+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:XdQmLPR --push --file Dockerfile --builder devspace-albert -","time":"2022-01-10T22:57:03+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-10T23:04:40+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-10T23:04:44+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8091\u001b[0m","time":"2022-01-10T23:04:44+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-10T23:04:44+10:30"}
+{"level":"fatal","msg":"Automatically exit DevSpace, because the user is inactive for 3h0m7.338096916s. To disable automatic exiting, run with --inactivity-timeout=0","time":"2022-01-11T02:05:00+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T11:36:22+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T11:36:22+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:36:23+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:36:26+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T11:36:31+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:pnzTRXQ' with engine 'buildkit'","time":"2022-01-11T11:36:31+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:pnzTRXQ --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T11:36:31+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T11:38:49+10:30"}
+{"level":"fatal","msg":"error deploying: error deploying ingress-image: exit status 1\nPlease make sure the command `kubectl apply` does work locally with manifest `manifest.yaml`","time":"2022-01-11T11:38:51+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T11:39:58+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T11:39:58+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:39:59+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:40:03+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T11:40:06+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:XmPKgzg' with engine 'buildkit'","time":"2022-01-11T11:40:06+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:XmPKgzg --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T11:40:07+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T11:40:54+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T11:40:54+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:40:55+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:41:01+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T11:41:03+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:sGWBTjA' with engine 'buildkit'","time":"2022-01-11T11:41:03+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:sGWBTjA --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T11:41:06+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T11:43:21+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T11:43:23+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T11:43:23+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T11:43:23+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T11:53:42+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T11:53:42+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:53:42+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T11:53:46+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T11:53:49+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:PDiwWlQ' with engine 'buildkit'","time":"2022-01-11T11:53:49+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:PDiwWlQ --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T11:53:52+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T11:57:06+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T11:57:11+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T11:57:11+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T11:57:11+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:24:08+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:24:08+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:24:08+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:24:12+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:24:15+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:24:18+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:24:18+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:24:18+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:27:55+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:27:55+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:27:56+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:28:02+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:28:05+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:28:10+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:28:10+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:28:10+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:29:04+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:29:04+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:29:05+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:29:08+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:29:10+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:29:13+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:29:13+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:29:13+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:42:43+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:42:43+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:42:43+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:42:49+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:42:52+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:42:54+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:42:54+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:42:54+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:43:33+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:43:33+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:43:34+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:43:39+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:43:42+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:43:44+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:43:44+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:43:44+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:47:46+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:47:46+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:47:46+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:47:51+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:47:54+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:47:56+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:47:56+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:47:56+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:54:37+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:54:37+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:54:38+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:54:42+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T12:54:45+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:gthLoCX' with engine 'buildkit'","time":"2022-01-11T12:54:45+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:gthLoCX --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T12:54:48+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T12:58:01+10:30"}
+{"level":"fatal","msg":"error deploying: error deploying ingress-image: exit status 1\nPlease make sure the command `kubectl apply` does work locally with manifest `manifest.yaml`","time":"2022-01-11T12:58:03+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T12:59:19+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T12:59:19+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:59:19+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T12:59:23+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T12:59:27+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T12:59:28+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T12:59:28+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T12:59:28+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T13:08:22+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T13:08:22+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:08:22+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:08:29+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T13:08:32+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:YqcGRIK' with engine 'buildkit'","time":"2022-01-11T13:08:32+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:YqcGRIK --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T13:08:35+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T13:11:47+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T13:11:49+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T13:11:49+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T13:11:49+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T13:22:16+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T13:22:16+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:22:17+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:23:10+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T13:23:13+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T13:23:15+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T13:23:15+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T13:23:15+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T13:44:24+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T13:44:24+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:44:24+10:30"}
+{"level":"fatal","msg":"in hook '\u001b[1;37maws sso login\u001b[0m': exit status 254","time":"2022-01-11T13:44:32+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T13:44:35+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T13:44:35+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:44:35+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:44:38+10:30"}
+{"level":"info","msg":"Skip building image 'ingress-image'","time":"2022-01-11T13:44:41+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T13:44:43+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T13:44:43+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T13:44:43+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T13:51:13+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T13:51:13+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:51:13+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T13:51:18+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T13:51:22+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:sbNTxsy' with engine 'buildkit'","time":"2022-01-11T13:51:22+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:sbNTxsy --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T13:51:24+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T13:54:36+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T13:54:40+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T13:54:40+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T13:54:40+10:30"}
+{"level":"error","msg":"Error gathering target pods for log streaming: pods by image name: list pods: Get \"https://4B232A23BBFD41FD0C25AF1FC46C3BEA.gr7.ap-southeast-2.eks.amazonaws.com/api/v1/namespaces/albert/pods\": http2: client connection lost","time":"2022-01-11T14:16:58+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T15:57:02+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T15:57:02+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T15:57:03+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T15:57:23+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T15:57:27+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:gRQAcJn' with engine 'buildkit'","time":"2022-01-11T15:57:27+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:gRQAcJn --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T15:57:29+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T16:00:42+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T16:00:47+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T16:00:47+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T16:00:47+10:30"}
+{"level":"info","msg":"Using namespace '\u001b[1;37malbert\u001b[0m'","time":"2022-01-11T18:05:16+10:30"}
+{"level":"info","msg":"Using kube context '\u001b[1;37malbert@insanemarketing.com.au@lumina-gov-kc.ap-southeast-2.eksctl.io\u001b[0m'","time":"2022-01-11T18:05:16+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws sso login\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T18:05:17+10:30"}
+{"level":"info","msg":"Execute hook '\u001b[1;37maws ecr get-login-password | docker login --username AWS --password-stdin 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com\u001b[0m' at \u001b[1;37mdevCommand:before:execute\u001b[0m","time":"2022-01-11T18:05:22+10:30"}
+{"level":"info","msg":"Rebuild image 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image because build context has changed","time":"2022-01-11T18:05:26+10:30"}
+{"level":"info","msg":"Building image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:rDhsvai' with engine 'buildkit'","time":"2022-01-11T18:05:26+10:30"}
+{"level":"info","msg":"Execute BuildKit command with: docker buildx build --tag 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:rDhsvai --push --file Dockerfile --builder devspace-albert -","time":"2022-01-11T18:05:27+10:30"}
+{"level":"info","msg":"Done processing image '319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image'","time":"2022-01-11T18:08:41+10:30"}
+{"level":"info","msg":"Successfully deployed ingress-image with kubectl","time":"2022-01-11T18:08:47+10:30"}
+{"level":"info","msg":"DevSpace UI available at: \u001b[1;37mhttp://localhost:8090\u001b[0m","time":"2022-01-11T18:08:47+10:30"}
+{"level":"info","msg":"Starting log streaming","time":"2022-01-11T18:08:47+10:30"}
+{"level":"error","msg":"Error gathering target pods for log streaming: pods by image name: list pods: Get \"https://4B232A23BBFD41FD0C25AF1FC46C3BEA.gr7.ap-southeast-2.eks.amazonaws.com/api/v1/namespaces/albert/pods\": http2: client connection lost","time":"2022-01-11T19:23:18+10:30"}
+{"level":"error","msg":"Error gathering target pods for log streaming: pods by image name: list pods: Get \"https://4B232A23BBFD41FD0C25AF1FC46C3BEA.gr7.ap-southeast-2.eks.amazonaws.com/api/v1/namespaces/albert/pods\": read tcp 10.220.59.159:49619-\u003e52.64.205.197:443: read: no route to host","time":"2022-01-11T19:24:51+10:30"}

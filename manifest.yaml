@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: drawbridge-ingress-service
+spec:
+  selector:
+    matchLabels:
+      app: drawbridge-ingress-service
+  template: # PodTemplateSpec
+    metadata:
+      labels:
+        app: drawbridge-ingress-service
+    spec: # PodSpec
+      serviceAccountName: drawbridge-ingress-service
+      containers:
+        - name: drawbridge-ingress-service
+          image: 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image
+          resources:
+            limits:
+              memory: "30Mi"
+              cpu: "0.2"
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+---
+# Custom Ingress Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: drawbridge-ingress-service
+spec:
+  type: NodePort
+  selector:
+    app: drawbridge-ingress-service
+  ports:
+    - name: http
+      nodePort: 30001
+      protocol: TCP
+      port: 30001
+      targetPort: 80
+    - name: https
+      nodePort: 30002
+      protocol: TCP
+      port: 30002
+      targetPort: 443
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: drawbridge-ingress-service
+rules:
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses
+      - services
+      - ingressclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - ingresses
+      - services
+      - ingressclasses
+    verbs:
+      - get
+      - list
+      - watch
+---
+# we want to create a cluster role binding for the service account
+# that gives the service account the ability to read the ingress
+# resources.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: drawbridge-ingress-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drawbridge-ingress-service
+subjects:
+  - kind: ServiceAccount
+    name: drawbridge-ingress-service
+    namespace: albert
+---
+# service account for the ingress service
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drawbridge-ingress-service
+  namespace: albert
