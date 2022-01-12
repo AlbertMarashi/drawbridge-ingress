@@ -82,12 +82,11 @@
 //!
 
 use hyper::Body;
-use tokio::net::TcpStream;
 use std::net::IpAddr;
 use std::str::FromStr;
 use hyper::header::{HeaderMap, HeaderValue, UPGRADE};
 use hyper::{Request, Response, Client, Uri};
-use lazy_static::{lazy_static, __Deref};
+use lazy_static::{lazy_static};
 
 use crate::{IngressLoadBalancerError, Code};
 
@@ -154,37 +153,97 @@ fn create_proxied_request<B>(client_ip: IpAddr, forward_url: &str, mut request: 
     request
 }
 
-pub async fn call(client_ip: IpAddr, forward_uri: &str, request: Request<Body>, tcp_stream: TcpStream) -> Result<Response<Body>, IngressLoadBalancerError> {
+pub async fn call(client_ip: IpAddr, forward_uri: &str, request: Request<Body>) -> Result<Response<Body>, IngressLoadBalancerError> {
 
     let is_websocket_upgrade = request.headers().contains_key(UPGRADE) && request.headers().get(UPGRADE).unwrap().to_str().unwrap().to_lowercase() == "websocket";
 
-	let proxied_request = create_proxied_request(client_ip, forward_uri, request);
-
+	let mut request = create_proxied_request(client_ip, forward_uri, request);
 
     let client = Client::new();
 
-    client.
-
-	let response = client.request(proxied_request)
-        .await
-        .map_err(|e| IngressLoadBalancerError::HyperError(e))?;
-
     if is_websocket_upgrade {
-        tokio::task::spawn(async move {
-            let result = match hyper::upgrade::on(&mut response).await {
-                Ok(upgraded) => {
-                    // upgraded is an io AsyncRead + AsyncWrite stream of the upgraded connection
+        let prox_req = {
+            let headers = request.headers().clone();
+            let uri = request.uri().clone();
+            let method = request.method().clone();
 
-                    Ok(())
-                },
-                Err(e) => Err(IngressLoadBalancerError::general(Code::WebsocketUpgradeError, "Unexpected status code when upgrading to websockets")),
+            let mut proxied_ws = Request::builder()
+                .uri(uri)
+                .method(method);
+
+            let prox_headers = proxied_ws.headers_mut().unwrap();
+            *prox_headers = headers;
+            proxied_ws.body(Body::empty())
+                .map_err(|_| IngressLoadBalancerError::general(Code::InternalServerError, "Error creating proxied request"))?
+        };
+
+        println!("proxy req {:#?}", prox_req);
+
+        let mut response = client.request(prox_req)
+            .await
+            .map_err(|e| IngressLoadBalancerError::HyperError(e))?;
+
+        println!("response {:#?}", response);
+
+        let prox_res = {
+            let headers = response.headers().clone();
+            let status = response.status().clone();
+            let version = response.version().clone();
+
+
+            let mut proxied_ws = Response::builder()
+                .status(status)
+                .version(version);
+
+            let prox_headers = proxied_ws.headers_mut().unwrap();
+            *prox_headers = headers;
+            proxied_ws.body(Body::empty())
+                .map_err(|_| IngressLoadBalancerError::general(Code::InternalServerError, "Error creating proxied response"))?
+        };
+
+        tokio::task::spawn(async move {
+            let client_stream = match hyper::upgrade::on(&mut request).await {
+                Ok(client_stream) => Ok(client_stream),
+                Err(e) => Err(IngressLoadBalancerError::general(Code::WebsocketUpgradeError, format!{"Error when upgrading client websockets: {:#?}", e})),
             };
 
-            if let Err(e) = result {
-                eprintln!("Error when upgrading to websockets: {:#?}", e);
-            }
+            let server_stream = match hyper::upgrade::on(&mut response).await {
+                Ok(server_stream) => Ok(server_stream),
+                Err(e) => Err(IngressLoadBalancerError::general(Code::WebsocketUpgradeError, format!{"Error when upgrading server websockets: {:#?}", e})),
+            };
+
+            let (client_stream, server_stream) = match (client_stream, server_stream) {
+                (Ok(client_stream), Ok(server_stream)) => (client_stream, server_stream),
+                (Err(e), _) | (_, Err(e)) => {
+                    println!("Error when upgrading client websockets: {:#?}", e);
+                    println!("Error when upgrading server websockets: {:#?}", e);
+                    eprintln!("Error creating client or server stream");
+                    return;
+                },
+            };
+
+            // we need to proxy the client stream to the server stream
+            // and vice versa into two different tasks
+            let (mut client_read, mut client_write) = tokio::io::split(client_stream);
+            let (mut server_read, mut server_write) = tokio::io::split(server_stream);
+
+            tokio::task::spawn(async move {
+                tokio::io::copy(&mut client_read, &mut server_write).await.unwrap();
+            });
+
+            tokio::task::spawn(async move {
+                tokio::io::copy(&mut server_read, &mut client_write).await.unwrap();
+            });
         });
+
+        println!("Proxying websocket request");
+
+        return Ok(create_proxied_response(prox_res))
     }
+
+    let response = client.request(request)
+        .await
+        .map_err(|e| IngressLoadBalancerError::HyperError(e))?;
 
     Ok(create_proxied_response(response))
 }

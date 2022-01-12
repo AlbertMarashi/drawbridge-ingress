@@ -16,17 +16,19 @@ use hyper::server::conn::AddrStream;
 use hyper::{Body, Request, Response, StatusCode, Server};
 use hyper::service::{make_service_fn, service_fn};
 use kube_config_tracker::RoutingTable;
-use tokio::net::TcpStream;
 
 mod kube_config_tracker;
 mod proxy;
+mod http_engine;
 
 
 #[derive(Debug)]
 pub enum Code {
     NonExistentHost,
     CouldNotReachBackend,
-    WebsocketUpgradeError
+    WebsocketUpgradeError,
+    HttpError,
+    InternalServerError,
 }
 
 #[derive(Debug)]
@@ -63,10 +65,9 @@ async fn main() {
     let proxy_service = make_service_fn(move |socket: &AddrStream| {
         let rt = rt.clone();
         let remote_addr = socket.remote_addr();
-        let tcp_stream = socket.into_inner();
         async move {
             Ok::<_, Error>(service_fn(move |req| {
-                proxy(rt.clone(), req, remote_addr.clone(), tcp_stream)
+                proxy(rt.clone(), req, remote_addr.clone())
             }))
         }
     });
@@ -78,8 +79,8 @@ async fn main() {
     }
 }
 
-async fn proxy (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAddr, tcp_stream: TcpStream) -> Result<Response<Body>, !> {
-    let result = proxy_request(rt, req, remote_addr, tcp_stream).await;
+async fn proxy (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAddr) -> Result<Response<Body>, !> {
+    let result = proxy_request(rt, req, remote_addr).await;
 
     match result {
         Ok(response) => Ok(response),
@@ -92,7 +93,7 @@ async fn proxy (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAd
 
 }
 
-async fn proxy_request (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAddr, tcp_stream: TcpStream) -> Result<Response<Body>, IngressLoadBalancerError> {
+async fn proxy_request (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAddr) -> Result<Response<Body>, IngressLoadBalancerError> {
     // http2 uses ":authority" as the host header, and http uses "host"
     // so we need to check both
     let host = {
@@ -129,5 +130,5 @@ async fn proxy_request (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: 
     let backend = rt.get_backend(&host, &path)
         .await?;
 
-    proxy::call(remote_addr.ip(), &format!("http://{}", backend), req, tcp_stream).await
+    proxy::call(remote_addr.ip(), &format!("http://{}", backend), req).await
 }

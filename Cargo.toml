@@ -14,3 +14,4 @@ regex = "1"
 hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4"
 unicase = "2.6.0"
+httparse = "1.5.1"
