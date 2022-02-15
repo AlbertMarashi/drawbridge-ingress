@@ -19,8 +19,6 @@ use kube_config_tracker::RoutingTable;
 
 mod kube_config_tracker;
 mod proxy;
-mod http_engine;
-
 
 #[derive(Debug)]
 pub enum Code {
@@ -90,12 +88,12 @@ async fn proxy (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAd
             Ok(response)
         }
     }
-
 }
 
 async fn proxy_request (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: SocketAddr) -> Result<Response<Body>, IngressLoadBalancerError> {
     // http2 uses ":authority" as the host header, and http uses "host"
     // so we need to check both
+
     let host = {
         let host = req.headers()
             .get("host");
@@ -110,6 +108,7 @@ async fn proxy_request (rt: Arc<RoutingTable>, req: Request<Body>, remote_addr: 
             Err(IngressLoadBalancerError::general(Code::NonExistentHost, "no host header found"))?
         }
     };
+
 
     // get the path from the uri
     let path = req
