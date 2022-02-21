@@ -1,5 +1,5 @@
 /target/
 /.git/
-Dockerfile
 manifest.yaml
 devspace.yaml
+Dockerfile

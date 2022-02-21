@@ -17,12 +17,14 @@ use tokio::sync::RwLock;
 use crate::{IngressLoadBalancerError, Code};
 
 pub struct RoutingTable {
-    backends_by_host: RwLock<HashMap<String, HashSet<Backend>>>, // there may be multiple backends for a host, so we need to store them in a map later
+    subscribers: RwLock<Vec<Box<dyn Fn() + Sync + Send>>>,
+    pub backends_by_host: RwLock<HashMap<String, HashSet<Backend>>>, // there may be multiple backends for a host, so we need to store them in a map later
 }
 
 impl RoutingTable {
     pub fn new() -> Self {
         Self {
+            subscribers: RwLock::new(Vec::new()),
             backends_by_host: RwLock::new(HashMap::new())
         }
     }
@@ -122,6 +124,7 @@ impl RoutingTable {
                                 // add the backend to the host
                                 backends_for_host.insert(backend);
 
+                                rt.notify_subscribers().await;
                             }
                         }
                     }
@@ -130,6 +133,18 @@ impl RoutingTable {
 
         // join all the futures
         futures::future::join_all(handles).await;
+    }
+
+    pub async fn subscribe(&self, subscriber: Box<dyn Fn() + Sync + Send>) {
+        self.subscribers.write().await.push(subscriber);
+    }
+
+    pub async fn notify_subscribers(&self) {
+        let mut subscribers = self.subscribers.write().await;
+
+        for subscriber in subscribers.iter_mut() {
+            subscriber();
+        }
     }
 
     pub async fn get_backend(&self, host: &str, path: &str) -> Result<String, IngressLoadBalancerError> {
@@ -148,7 +163,7 @@ impl RoutingTable {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct Backend {
+pub struct Backend {
     host: String,
     path_regex: RegexWrapper,
     service_name: String,
