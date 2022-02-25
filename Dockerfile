@@ -1,5 +1,5 @@
 # Build the executable
-FROM rust:buster as builder
+FROM rust:bullseye as builder
 WORKDIR /app
 RUN rustup default nightly
 
@@ -19,9 +19,14 @@ COPY ./drawbridge-ingress/ .
 RUN cargo build --release
 
 # Copy the executable and extra files ("static") to an empty Docker image
-FROM debian:buster
+FROM debian:bullseye
 
 # Install libssl-dev and pkg-config
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
 COPY --from=builder /app/target/release/ ./ingress
+
+RUN apt install -y ca-certificates
+RUN sed -i '/^mozilla\/DST_Root_CA_X3.crt$/ s/^/!/' /etc/ca-certificates.conf
+RUN update-ca-certificates
+
 CMD [ "./ingress/drawbridge-ingress" ]

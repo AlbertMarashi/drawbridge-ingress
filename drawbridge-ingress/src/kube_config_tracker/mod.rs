@@ -10,7 +10,6 @@ use k8s_openapi::api::core::v1::{Service};
 use k8s_openapi::api::networking::v1::Ingress;
 use kube::{Api, Client, api::ListParams, runtime};
 use futures::{StreamExt};
-
 use regex::Regex;
 use tokio::sync::RwLock;
 

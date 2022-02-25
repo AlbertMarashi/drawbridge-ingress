@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use hyper::{Body, Method, Request, Response};
-use openssl::pkey::{PKey, Private};
+use openssl::{pkey::{PKey, Private}};
 use p256::ecdsa::SigningKey;
 use serde::Serialize;
 use serde_json::json;
@@ -145,7 +145,7 @@ impl Account {
         let response = send_request(Method::POST, &directory, &directory.new_account, &es_key, None, payload)
             .await?;
 
-        if response.status() != 201 {
+        if response.status() != 200 {
             let status = response.status();
             let headers = format!("{:#?}", response.headers());
             let error = format!("{status} {headers}\n {:#?}", {

@@ -31,10 +31,11 @@ fn create_proxied_request<B>(client_ip: IpAddr, forward_url: &str, mut request: 
 }
 
 pub async fn call(client_ip: IpAddr, forward_uri: &str, request: Request<Body>) -> Result<Response<Body>, IngressLoadBalancerError> {
-
     let is_websocket_upgrade = request.headers().contains_key(UPGRADE) && request.headers().get(UPGRADE).unwrap().to_str().unwrap().to_lowercase() == "websocket";
 
 	let mut request = create_proxied_request(client_ip, forward_uri, request);
+
+    println!("{:#?}", request);
 
     let client = Client::new();
 

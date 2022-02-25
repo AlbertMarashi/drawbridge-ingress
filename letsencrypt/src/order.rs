@@ -68,7 +68,7 @@ where F: Fn(Http01Challenge) -> Fut,
     }
 
     for challenge in challenges {
-        let mut i = 0;
+        let mut i = 1;
         handle_challenge(challenge.clone()).await;
 
         loop {

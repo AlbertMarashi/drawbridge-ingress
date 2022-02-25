@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use openssl::asn1::Asn1Time;
 use openssl::hash::MessageDigest;
-use openssl::pkey::{self, PKey};
+use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 use openssl::stack::Stack;
 use openssl::x509::extension::SubjectAlternativeName;
@@ -14,12 +14,12 @@ use crate::error::LetsEncryptError;
 ///
 /// This library does not check the number of bits used to create the key pair.
 /// For Let's Encrypt, the bits must be between 2048 and 4096.
-pub fn create_rsa_key(bits: u32) -> PKey<pkey::Private> {
+pub fn create_rsa_key(bits: u32) -> PKey<Private> {
     let pri_key_rsa = Rsa::generate(bits).expect("Rsa::generate");
-    PKey::from_rsa(pri_key_rsa).expect("from_rsa")
+    PKey::from_rsa(pri_key_rsa).expect("PKey::from_rsa")
 }
 
-pub(crate) fn create_csr(pkey: &PKey<pkey::Private>, domains: &[String]) -> Result<X509Req, LetsEncryptError> {
+pub(crate) fn create_csr(pkey: &PKey<Private>, domains: &[String]) -> Result<X509Req, LetsEncryptError> {
     //
     // the csr builder
     let mut req_bld = X509ReqBuilder::new()

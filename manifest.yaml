@@ -55,21 +55,25 @@ rules:
     resources:
       - ingresses
       - services
+      - secrets
       - ingressclasses
     verbs:
       - get
       - list
       - watch
+      - create
   - apiGroups:
       - ""
     resources:
       - ingresses
       - services
+      - secrets
       - ingressclasses
     verbs:
       - get
       - list
       - watch
+      - create
 ---
 # we want to create a cluster role binding for the service account
 # that gives the service account the ability to read the ingress
@@ -85,11 +89,11 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: drawbridge-ingress-service
-    namespace: albert
+    namespace: drawbridge-ingress
 ---
 # service account for the ingress service
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: drawbridge-ingress-service
-  namespace: albert
+  namespace: drawbridge-ingress
