@@ -38,6 +38,7 @@ mod letsencrypt_system;
 mod proxy;
 mod tls;
 mod raft;
+mod leadership;
 
 #[derive(Debug)]
 pub enum Code {

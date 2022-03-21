@@ -4,7 +4,10 @@ extern crate async_trait;
 extern crate serde;
 
 mod types;
-mod rpc;
+mod peer;
+mod senator;
+mod states;
+pub mod utils;
 
 pub use types::{
     RPC,
@@ -13,9 +16,21 @@ pub use types::{
     Request,
     Response,
     NodeID,
+    Peer,
+    UserReq,
+    UserRes,
 };
 
-pub use rpc::{
-    RPCNetwork,
-    Peer
-};
+pub use senator::RPCNetwork;
+
+#[derive(Debug)]
+pub enum Error {
+    IO(std::io::Error),
+    CouldNotSerialize,
+    CouldNotDeserialize,
+    InvalidMessageType,
+    UnexpectedEOF,
+    ResponseTimeout,
+    ChannelError,
+    PeerNotFound
+}

@@ -205,7 +205,7 @@ pub fn with_directory_server() -> (JoinHandle<()>, String) {
     let server = Server::bind(&addr).serve(make_service);
     let handle = tokio::task::spawn(async move {
         if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            eprintln!("Server error: {}", e);
         }
     });
 

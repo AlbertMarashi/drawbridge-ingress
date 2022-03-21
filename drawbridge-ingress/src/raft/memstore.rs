@@ -59,7 +59,7 @@ pub struct MemStoreSnapshot {
 pub struct MemStoreStateMachine {
     pub last_applied_log: u64,
     /// A mapping of client IDs to their state info.
-    pub client_serial_responses: HashMap<String, (u64, CertificateStateMinimal)>,
+    pub client_serial_responses: HashMap<String, (u64, Option<CertificateStateMinimal>)>,
     /// The current status of a client by ID.
     pub client_status: HashMap<String, CertificateStateMinimal>,
 }

@@ -144,7 +144,7 @@ impl rustls::server::ResolvesServerCert for LetsEncrypt {
                 let state = self.state.clone();
                 let certs = tokio::task::block_in_place(move || {
                     Handle::current().block_on(async move {
-                        let state =state.read().await;
+                        let state = state.read().await;
                         state.certs.read().await
                     })
                 });
