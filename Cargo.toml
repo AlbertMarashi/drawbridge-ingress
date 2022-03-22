@@ -1,8 +1,8 @@
 [workspace]
 
 members = [
-    "drawbridge-ingress",
+    "drawbridge_ingress",
     "letsencrypt",
     "congress",
-    "events"
+    "tls_acceptor"
 ]
