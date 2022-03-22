@@ -2,6 +2,8 @@
 extern crate async_trait;
 #[macro_use]
 extern crate serde;
+#[macro_use]
+extern crate derivative;
 
 mod types;
 mod peer;
@@ -19,6 +21,7 @@ pub use types::{
     Peer,
     UserReq,
     UserRes,
+    UserMessage,
 };
 
 pub use senator::RPCNetwork;

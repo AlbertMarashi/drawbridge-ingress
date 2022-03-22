@@ -1,10 +1,7 @@
 use std::{fmt::Debug, sync::Arc};
 
 use serde::{Serialize, de::DeserializeOwned};
-use tokio::{sync::{Mutex}, time::Instant, io::{WriteHalf, ReadHalf, AsyncRead, AsyncWrite}};
-use uuid::Uuid;
-
-use crate::Error;
+use tokio::{sync::{Mutex, RwLock}, time::Instant, io::{WriteHalf, ReadHalf, AsyncRead, AsyncWrite}};
 
 pub type NodeID = u64;
 
@@ -20,9 +17,8 @@ impl<T> Stream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'st
 #[async_trait]
 pub trait RPC<Req: UserReq, Res: UserRes>: Send + Sync + 'static {
     async fn members(&self) -> Vec<NodeID>;
-    async fn recv(&self) -> Option<Request<Req>>;
-    async fn send_request(&self, req: Request<Req>) -> Result<Response<Res>, Error>;
-    async fn send_response(&self, res: Response<Res>) -> Result<(), Error>;
+    async fn recv_msg(&self) -> Message<Req, Res>;
+    async fn send_msg(&self, msg: Message<Req, Res>);
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +29,13 @@ pub enum Role {
 }
 
 #[derive(Debug)]
+pub enum UserMessage<Req, Res> {
+    Request(Req),
+    Response(Res),
+}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
     pub id: NodeID,
     pub rpc: Arc<R>,
@@ -43,50 +46,39 @@ pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
     pub next_timeout: Mutex<Instant>,
     pub current_leader: Mutex<Option<NodeID>>,
     pub phantom_res: std::marker::PhantomData<Res>,
+    #[derivative(Debug="ignore")]
+    pub on_role: RwLock<Vec<Box<dyn Fn(Role) + Send + Sync + 'static>>>,
+    #[derivative(Debug="ignore")]
+    pub on_message: RwLock<Vec<Box<dyn Fn(UserMessage<Req, Res>) + Send + Sync + 'static>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum Message<Req, Res> {
+pub struct Message<Req, Res> {
+    pub from: NodeID,
+    pub to : NodeID,
+    pub term: u64,
+    pub msg: MessageType<Req, Res>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum MessageType<Req, Res> {
     Request(Request<Req>),
     Response(Response<Res>),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum ResponseType<Res> {
+pub enum Response<Res> {
     Heartbeat,
-    RequestVote { vote_granted: bool },
+    Vote { vote_granted: bool },
     Custom(Res),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Response<Res> {
-    pub peer_id: NodeID,
-    pub req_id: Uuid,
-    pub term: u64,
-    pub msg: ResponseType<Res>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Request<Req> {
-    pub peer_id: NodeID,
-    pub req_id: Uuid,
-    pub term: u64,
-    pub msg: RequestType<Req>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum RequestType<Req> {
+pub enum Request<Req> {
     Heartbeat,
-    RequestVote,
+    VoteRequest,
     Custom(Req),
 }
-
-pub struct VoteRequest {
-    pub term: u64,
-    pub req_id: Uuid,
-    pub peer_id: NodeID,
-}
-
 #[derive(Debug)]
 pub struct Peer<S: Stream> {
     pub id: NodeID,
