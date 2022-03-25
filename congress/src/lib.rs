@@ -1,9 +1,6 @@
-#[macro_use]
-extern crate async_trait;
-#[macro_use]
-extern crate serde;
-#[macro_use]
-extern crate derivative;
+#[macro_use] extern crate async_trait;
+#[macro_use] extern crate serde;
+#[macro_use] extern crate derivative;
 
 mod types;
 mod peer;
@@ -21,7 +18,8 @@ pub use types::{
     Peer,
     UserReq,
     UserRes,
-    UserMessage,
+    MessageType,
+    Message
 };
 
 pub use senator::RPCNetwork;
@@ -29,6 +27,7 @@ pub use senator::RPCNetwork;
 #[derive(Debug)]
 pub enum Error {
     IO(std::io::Error),
+    Other(String),
     CouldNotSerialize,
     CouldNotDeserialize,
     InvalidMessageType,

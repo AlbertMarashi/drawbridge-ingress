@@ -1,10 +1,74 @@
-use hyper::{Body, Uri};
-use std::net::IpAddr;
+use hyper::{Body, Uri, StatusCode};
 use std::str::FromStr;
-use hyper::header::{ HeaderValue, UPGRADE};
+use std::sync::Arc;
+use hyper::header::{UPGRADE};
 use hyper::{Request, Response, Client};
 
+use crate::kube_config_tracker::RoutingTable;
+use crate::certificate_generation::LetsEncrypt;
 use crate::{IngressLoadBalancerError, Code};
+
+pub async fn proxy_request(
+    rt: Arc<RoutingTable>,
+    req: Request<Body>,
+    lets_encrypt: Arc<LetsEncrypt>,
+) -> Result<Response<Body>, !> {
+    // http2 uses ":authority" as the host header, and http uses "host"
+    // so we need to check both
+
+    let result: Result<Response<Body>, IngressLoadBalancerError> = try {
+        let headers = req.headers();
+        let host = match (headers.get("host"), headers.get(":authority")) {
+            (Some(host), _) => host.to_str().map_err(|_| {
+                IngressLoadBalancerError::general(
+                    Code::NonExistentHost,
+                    "Could not parse host header",
+                )
+            })?,
+            (_, Some(authority)) => authority.to_str().map_err(|_| {
+                IngressLoadBalancerError::general(
+                    Code::NonExistentHost,
+                    "Could not parse authority header",
+                )
+            })?,
+            (None, None) => Err(IngressLoadBalancerError::general(
+                Code::NonExistentHost,
+                "no host header found",
+            ))?
+        };
+
+        // get the path from the uri
+        let path = req.uri().path();
+
+        // print path
+        println!("{} {}", host, path);
+
+        if let Some(res) = lets_encrypt.handle_if_challenge(host, path).await {
+            return Ok(res);
+        }
+
+        // if the URL is /health-check then return a 200
+        if path == "/health-check" {
+            let mut response = Response::new(Body::empty());
+            *response.status_mut() = StatusCode::OK;
+            return Ok(response);
+        }
+
+        // get the backend for the host and path
+        let backend = rt.get_backend(&host, &path).await?;
+
+        call_proxy( &format!("http://{}", backend), req).await?
+    };
+
+    match result {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            let mut response = Response::new(format!("Ingress Error\n{:#?}", e).into());
+            *response.status_mut() = StatusCode::BAD_GATEWAY;
+            Ok(response)
+        }
+    }
+}
 
 
 fn forward_uri<B>(forward_url: &str, req: &Request<B>) -> Uri {
@@ -16,24 +80,11 @@ fn forward_uri<B>(forward_url: &str, req: &Request<B>) -> Uri {
     Uri::from_str(forward_uri.as_str()).unwrap()
 }
 
-
-fn create_proxied_request<B>(client_ip: IpAddr, forward_url: &str, mut request: Request<B>) -> Request<B> {
-    let x_forwarded_for_header_name = "x-forwarded-for";
-
-    *request.uri_mut() = forward_uri(forward_url, &request);
-
-    // Add forwarding information in the headers
-    if !request.headers().contains_key(x_forwarded_for_header_name) {
-        request.headers_mut().insert(x_forwarded_for_header_name, HeaderValue::from_str(client_ip.to_string().as_str()).unwrap());
-    }
-
-    request
-}
-
-pub async fn call(client_ip: IpAddr, forward_uri: &str, request: Request<Body>) -> Result<Response<Body>, IngressLoadBalancerError> {
+pub async fn call_proxy(forward_url: &str, mut request: Request<Body>) -> Result<Response<Body>, IngressLoadBalancerError> {
     let is_websocket_upgrade = request.headers().contains_key(UPGRADE) && request.headers().get(UPGRADE).unwrap().to_str().unwrap().to_lowercase() == "websocket";
 
-	let mut request = create_proxied_request(client_ip, forward_uri, request);
+    // ensure the URI is forwarded correctly
+    *request.uri_mut() = forward_uri(forward_url, &request);
 
     println!("{:#?}", request);
 

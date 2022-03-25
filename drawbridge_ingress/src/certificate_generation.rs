@@ -1,18 +1,18 @@
-use std::{collections::HashMap, sync::Arc};
-use hyper::{Response, Body};
+use crate::kube_config_tracker::RoutingTable;
+use hyper::{Body, Response};
 use k8s_openapi::api::core::v1::Secret;
 use kube::ResourceExt;
-use kube::{Client, Api, api::PostParams};
+use kube::{api::PostParams, Api, Client};
+use letsencrypt::account::Account;
 use letsencrypt::challenge::Http01Challenge;
 use letsencrypt::directory::{Directory, PRODUCTON, STAGING};
-use letsencrypt::{account::Account};
+use rustls::ServerConfig;
 use rustls::sign::CertifiedKey;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::runtime::Handle;
+use tls_acceptor::tls_acceptor::ResolvesServerConf;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
-
-use crate::kube_config_tracker::RoutingTable;
 
 const NAMESPACE: &str = "drawbridge-ingress";
 const ENV: Environment = Environment::Staging;
@@ -20,7 +20,7 @@ const ENV: Environment = Environment::Staging;
 #[allow(dead_code)]
 enum Environment {
     Production,
-    Staging
+    Staging,
 }
 
 impl Environment {
@@ -110,12 +110,16 @@ impl<'de> Deserialize<'de> for CertKey {
 
         let cert_key_minimal = CertKeyMinimal::deserialize(deserializer)?;
 
-        Ok(cert_key_from(cert_key_minimal.certs, cert_key_minimal.private_key))
+        Ok(cert_key_from(
+            cert_key_minimal.certs,
+            cert_key_minimal.private_key,
+        ))
     }
 }
 
 #[derive(Clone)]
-pub struct CertKey { // DER encoded
+pub struct CertKey {
+    // DER encoded
     pub certs: Vec<Vec<u8>>,
     pub private_key: Vec<u8>,
     pub certified_key: Arc<CertifiedKey>,
@@ -123,7 +127,11 @@ pub struct CertKey { // DER encoded
 
 impl std::fmt::Debug for CertKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CertKey {{ certs: {:?}, private_key: {:?} }}", self.certs, self.private_key)
+        write!(
+            f,
+            "CertKey {{ certs: {:?}, private_key: {:?} }}",
+            self.certs, self.private_key
+        )
     }
 }
 
@@ -135,25 +143,51 @@ pub struct CertData {
     pub certs: Vec<Vec<u8>>,
 }
 
-impl rustls::server::ResolvesServerCert for LetsEncrypt {
-    fn resolve(&self, client_hello: rustls::server::ClientHello) -> Option<Arc<CertifiedKey>> {
-        let name = client_hello.server_name();
+fn cert_key_from(certs: Vec<Vec<u8>>, private_key: Vec<u8>) -> CertKey {
+    let key = rustls::sign::RsaSigningKey::new(&rustls::PrivateKey(private_key.clone())).unwrap();
+
+    CertKey {
+        certified_key: Arc::new(CertifiedKey::new(
+            certs
+                .iter()
+                .map(|cert| rustls::Certificate(cert.clone()))
+                .collect(),
+            Arc::new(key),
+        )),
+        certs,
+        private_key,
+    }
+}
+
+#[async_trait::async_trait]
+impl ResolvesServerConf for LetsEncrypt {
+    async fn resolve_server_config(&self, hello: &rustls::server::ClientHello) -> Option<Arc<ServerConfig>> {
+        let name = hello.server_name();
 
         match name {
             Some(name) => {
                 let state = self.state.clone();
-                let certs = tokio::task::block_in_place(move || {
-                    Handle::current().block_on(async move {
-                        let state = state.read().await;
-                        state.certs.read().await
-                    })
-                });
-
-                let cert = certs
-                    .get(name);
+                let state = state.read().await;
+                let certs = state.certs.read().await;
+                let cert = certs.get(name);
 
                 match cert {
-                    Some(cert) => Some(cert.certified_key.clone()),
+                    Some(cert) => {
+                        let mut cfg = rustls::ServerConfig::builder()
+                            .with_safe_default_cipher_suites()
+                            .with_safe_default_kx_groups()
+                            .with_safe_default_protocol_versions()
+                            .unwrap()
+                            .with_no_client_auth()
+                            .with_single_cert(cert.certs.iter()
+                            .map(|cert| rustls::Certificate(cert.clone()))
+                            .collect(), rustls::PrivateKey(cert.private_key.clone()))
+                            .unwrap();
+
+                        cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+                        Some(Arc::new(cfg))
+                    }
                     None => None,
                 }
             }
@@ -162,22 +196,11 @@ impl rustls::server::ResolvesServerCert for LetsEncrypt {
     }
 }
 
-fn cert_key_from(certs: Vec<Vec<u8>>, private_key: Vec<u8>) -> CertKey {
-    let key = rustls::sign::RsaSigningKey::new(&rustls::PrivateKey(private_key.clone())).unwrap();
-
-    CertKey {
-        certified_key: Arc::new(CertifiedKey::new(
-            certs.iter().map(|cert| rustls::Certificate(cert.clone())).collect(),
-            Arc::new(key)
-        )),
-        certs,
-        private_key,
-    }
-}
-
 impl LetsEncrypt {
     pub async fn setup(rt: Arc<RoutingTable>) -> Self {
-        let mut kube_api = Client::try_default().await.expect("Expected a valid KUBECONFIG environment variable");
+        let mut kube_api = Client::try_default()
+            .await
+            .expect("Expected a valid KUBECONFIG environment variable");
         let account = Self::get_account(&mut kube_api).await;
         let certs = Self::get_certs(&mut kube_api).await;
 
@@ -198,23 +221,34 @@ impl LetsEncrypt {
     async fn get_account(kube_api: &Client) -> Account {
         let secrets: Api<Secret> = Api::namespaced(kube_api.clone(), NAMESPACE);
 
-        let account_secret = secrets.get(&format!("letsencrypt-account-{}", ENV.to_name())).await.ok();
+        let account_secret = secrets
+            .get(&format!("letsencrypt-account-{}", ENV.to_name()))
+            .await
+            .ok();
 
-        let directory = Directory::from_url(ENV.to_url()).await.expect("Could not get letsencrypt directory");
+        let directory = Directory::from_url(ENV.to_url())
+            .await
+            .expect("Could not get letsencrypt directory");
 
         match account_secret {
             Some(Secret {
-                data: Some(data),
-                ..
+                data: Some(data), ..
             }) => {
                 let email = &data.get("email").unwrap().0;
                 let private_key = &data.get("private_key").unwrap().0;
                 let es_key = &data.get("es_key").unwrap().0;
 
-                let account = Account::account_from(directory, &String::from_utf8_lossy(&email), &es_key, &private_key).await.unwrap();
+                let account = Account::account_from(
+                    directory,
+                    &String::from_utf8_lossy(&email),
+                    &es_key,
+                    &private_key,
+                )
+                .await
+                .unwrap();
 
                 return account;
-            },
+            }
             _ => {
                 let account = directory
                     .new_account("albert@framework.tools")
@@ -235,12 +269,16 @@ impl LetsEncrypt {
                         "email": base64::encode("albert@framework.tools"),
                         "es_key": base64::encode(&account.es_key)
                     }
-                })).unwrap();
+                }))
+                .unwrap();
 
-                secrets.create(&PostParams::default(), &data).await.expect("Failed to create secret");
+                secrets
+                    .create(&PostParams::default(), &data)
+                    .await
+                    .expect("Failed to create secret");
 
                 return account;
-            },
+            }
         }
     }
 
@@ -249,12 +287,14 @@ impl LetsEncrypt {
 
         let secrets: Api<Secret> = Api::namespaced(kube_api.clone(), NAMESPACE);
 
-        let certs = secrets.get(&format!("letsencrypt-certs-{}", ENV.to_name())).await.ok();
+        let certs = secrets
+            .get(&format!("letsencrypt-certs-{}", ENV.to_name()))
+            .await
+            .ok();
 
         match certs {
             Some(Secret {
-                data: Some(data),
-                ..
+                data: Some(data), ..
             }) => {
                 let certs = &data.get("certs").unwrap().0;
 
@@ -263,7 +303,7 @@ impl LetsEncrypt {
                 for (host, cert_data) in certs {
                     map.insert(host, cert_key_from(cert_data.certs, cert_data.private_key));
                 }
-            },
+            }
             _ => {}
         }
 
@@ -273,16 +313,19 @@ impl LetsEncrypt {
     #[inline]
     pub async fn handle_if_challenge(&self, host: &str, path: &str) -> Option<Response<Body>> {
         let state = self.state.read().await;
-        if let Some(challenge) = state.challenges.read().await.get(&(host.to_string(), path.to_string())) {
-            return Some(Response::new(Body::from(challenge.clone())))
+        if let Some(challenge) = state
+            .challenges
+            .read()
+            .await
+            .get(&(host.to_string(), path.to_string()))
+        {
+            return Some(Response::new(Body::from(challenge.clone())));
         }
         None
     }
 
     pub async fn check_for_new_certificates(&self) {
-        let backends = self.routing_table.backends_by_host
-            .read()
-            .await;
+        let backends = self.routing_table.backends_by_host.read().await;
         let state = self.state.read().await;
 
         let mut certs = state.certs.write().await;
@@ -290,37 +333,54 @@ impl LetsEncrypt {
         for (host, _backend) in backends.iter() {
             let cert = certs.get(host);
             if cert.is_none() {
-                let cert = self.account.generate_certificate(&[host.to_string()], |Http01Challenge {
-                    contents,
-                    domain,
-                    path,
-                    ..
-                }| {
-                    let state = self.state.clone();
-                    async move {
-                        let state = state.write().await;
+                let cert = self
+                    .account
+                    .generate_certificate(
+                    &[host.to_string()],
+                    |Http01Challenge {
+                            contents,
+                            domain,
+                            path,
+                            ..
+                        }| {
+                            let state = self.state.clone();
+                            async move {
+                                let state = state.write().await;
 
-                        let mut challenges = state.challenges.write().await;
-                        challenges.insert((domain, path), contents);
-                    }
-                }).await.expect("Expected a valid certificate");
+                                let mut challenges = state.challenges.write().await;
+                                challenges.insert((domain, path), contents);
+                            }
+                        },
+                    )
+                    .await
+                    .expect("Expected a valid certificate");
 
-                let certs_vec = rustls_pemfile::certs(&mut Box::new(&cert.certificate_to_pem()[..])).unwrap();
-                certs.insert(host.to_string(), cert_key_from(certs_vec, cert.private_key_to_der()));
+                let certs_vec =
+                    rustls_pemfile::certs(&mut Box::new(&cert.certificate_to_pem()[..])).unwrap();
+                certs.insert(
+                    host.to_string(),
+                    cert_key_from(certs_vec, cert.private_key_to_der()),
+                );
             }
         }
 
         let secrets: Api<Secret> = Api::namespaced(self.kube_api.clone(), NAMESPACE);
 
-        let certs_secret = secrets.get(&format!("letsencrypt-certs-{}", ENV.to_name())).await.ok();
+        let certs_secret = secrets
+            .get(&format!("letsencrypt-certs-{}", ENV.to_name()))
+            .await
+            .ok();
 
         let entries = {
             let mut entries = Vec::new();
             for (host, host_cert_key) in certs.iter() {
-                entries.push((host.clone(), CertData {
-                    certs: host_cert_key.certs.clone(),
-                    private_key: host_cert_key.private_key.clone(),
-                }));
+                entries.push((
+                    host.clone(),
+                    CertData {
+                        certs: host_cert_key.certs.clone(),
+                        private_key: host_cert_key.private_key.clone(),
+                    },
+                ));
             }
             entries
         };
@@ -337,18 +397,25 @@ impl LetsEncrypt {
             "data": {
                 "certs": entries
             }
-        })).unwrap();
+        }))
+        .unwrap();
 
         match certs_secret {
             Some(secret) => {
                 // first we need to get the data and get revision so we can replace
                 data.metadata.resource_version = secret.resource_version();
-                secrets.replace(&format!("letsencrypt-certs-{}", ENV.to_name()), &PostParams::default(), &data)
+                secrets
+                    .replace(
+                        &format!("letsencrypt-certs-{}", ENV.to_name()),
+                        &PostParams::default(),
+                        &data,
+                    )
                     .await
                     .expect("Failed to replace secret");
-            },
+            }
             None => {
-                secrets.create(&PostParams::default(), &data)
+                secrets
+                    .create(&PostParams::default(), &data)
                     .await
                     .expect("Failed to create secret");
             }
@@ -359,11 +426,15 @@ impl LetsEncrypt {
 #[ignore]
 #[tokio::test]
 async fn can_convert_account_to_secret() {
-    let kube_api = Client::try_default().await.expect("Expected a valid KUBECONFIG environment variable");
+    let kube_api = Client::try_default()
+        .await
+        .expect("Expected a valid KUBECONFIG environment variable");
 
     let secrets: Api<Secret> = Api::namespaced(kube_api.clone(), NAMESPACE);
 
-    let directory = Directory::from_url(ENV.to_url()).await.expect("Could not get letsencrypt directory");
+    let directory = Directory::from_url(ENV.to_url())
+        .await
+        .expect("Could not get letsencrypt directory");
 
     let account = directory
         .new_account("albert@framework.tools")
@@ -384,15 +455,21 @@ async fn can_convert_account_to_secret() {
             "email": base64::encode("albert@framework.tools"),
             "es_key": base64::encode(&account.es_key),
         }
-    })).expect("Err creating secret");
+    }))
+    .expect("Err creating secret");
 
-    secrets.create(&PostParams::default(), &data).await.expect("Failed to create secret");
+    secrets
+        .create(&PostParams::default(), &data)
+        .await
+        .expect("Failed to create secret");
 }
 
 #[ignore]
 #[tokio::test]
 async fn can_convert_account_to_secret_2() {
-    let kube_api = Client::try_default().await.expect("Expected a valid KUBECONFIG environment variable");
+    let kube_api = Client::try_default()
+        .await
+        .expect("Expected a valid KUBECONFIG environment variable");
 
     let _account = LetsEncrypt::get_account(&kube_api).await;
 }

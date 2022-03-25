@@ -19,6 +19,8 @@ pub trait RPC<Req: UserReq, Res: UserRes>: Send + Sync + 'static {
     async fn members(&self) -> Vec<NodeID>;
     async fn recv_msg(&self) -> Message<Req, Res>;
     async fn send_msg(&self, msg: Message<Req, Res>);
+    /// This ID should never change
+    fn our_id(&self) -> NodeID;
 }
 
 #[derive(Debug, Clone)]
@@ -27,13 +29,6 @@ pub enum Role {
     Follower,
     Candidate,
 }
-
-#[derive(Debug)]
-pub enum UserMessage<Req, Res> {
-    Request(Req),
-    Response(Res),
-}
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
@@ -41,7 +36,6 @@ pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
     pub rpc: Arc<R>,
     pub role: Mutex<Role>,
     pub term: Mutex<u64>,
-    pub last_state: Mutex<Option<Req>>,
     pub voted_for: Mutex<Option<NodeID>>,
     pub next_timeout: Mutex<Instant>,
     pub current_leader: Mutex<Option<NodeID>>,
@@ -49,7 +43,7 @@ pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
     #[derivative(Debug="ignore")]
     pub on_role: RwLock<Vec<Box<dyn Fn(Role) + Send + Sync + 'static>>>,
     #[derivative(Debug="ignore")]
-    pub on_message: RwLock<Vec<Box<dyn Fn(UserMessage<Req, Res>) + Send + Sync + 'static>>>,
+    pub on_message: RwLock<Vec<Box<dyn Fn(Message<Req, Res>) + Send + Sync + 'static>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -62,6 +56,7 @@ pub struct Message<Req, Res> {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum MessageType<Req, Res> {
+
     Request(Request<Req>),
     Response(Response<Res>),
 }
@@ -81,7 +76,8 @@ pub enum Request<Req> {
 }
 #[derive(Debug)]
 pub struct Peer<S: Stream> {
-    pub id: NodeID,
+    pub established_by: NodeID,
+    pub peer_id: NodeID,
     pub write_half: Mutex<WriteHalf<S>>,
     pub read_half: Mutex<ReadHalf<S>>,
 }

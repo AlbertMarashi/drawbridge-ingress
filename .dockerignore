@@ -3,3 +3,4 @@
 manifest.yaml
 devspace.yaml
 Dockerfile
+.devspace

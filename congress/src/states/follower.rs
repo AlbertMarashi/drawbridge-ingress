@@ -38,7 +38,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Follower<Req, Res, R> {
             tokio::select! {
                 // we will sleep until the next timeout
                 _ = timeout_fut => *self.senator.role.lock().await = Role::Candidate,
-                Message { term, from, msg, ..} = self.senator.rpc.recv_msg() => match msg {
+                msg @ Message { term, from, ..} = self.senator.rpc.recv_msg() => match msg.msg {
                     MessageType::Request(Request::Heartbeat) => {
                         // we will reply with a heartbeat response
                         // but first set the timeout to the next timeout
@@ -56,7 +56,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Follower<Req, Res, R> {
                         }).await;
                     },
                     MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(from, term).await,
-                    MessageType::Request(Request::Custom(req)) => self.senator.handle_user_request(req).await,
+                    MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
                     _ => {}
                 }
             }

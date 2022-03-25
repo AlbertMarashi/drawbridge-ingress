@@ -60,27 +60,27 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Candidate<Req, Res, R> {
                 tokio::select! {
                     // election has timed out, break to outer loop;
                     _ = timeout_fut => break,
-                    Message { term, from, msg, .. } = self.senator.rpc.recv_msg() => match msg {
+                    msg = self.senator.rpc.recv_msg() => match msg.msg {
                         MessageType::Request(Request::Heartbeat) => {
                             // if a term is greater than ours, we will become a follower
                             // and set our term to theirs, and leader to them.
-                            if term > *self.senator.term.lock().await {
-                                *self.senator.term.lock().await = term;
-                                *self.senator.current_leader.lock().await = Some(from);
+                            if msg.term > *self.senator.term.lock().await {
+                                *self.senator.term.lock().await = msg.term;
+                                *self.senator.current_leader.lock().await = Some(msg.from);
                                 *self.senator.role.lock().await = Role::Follower;
                             }
                             self.senator.rpc.send_msg(Message {
                                 from: self.senator.id,
-                                to: from,
+                                to: msg.from,
                                 term: *self.senator.term.lock().await,
                                 msg: MessageType::Response(Response::Heartbeat)
                             }).await
                         },
-                        MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(from, term).await,
-                        MessageType::Request(Request::Custom(req)) => self.senator.handle_user_request(req).await,
+                        MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(msg.from, msg.term).await,
+                        MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
                         MessageType::Response(Response::Vote { vote_granted }) => {
-                            // ignore vote responses that are less than our term
-                            if term == *self.senator.term.lock().await && vote_granted {
+                            // ignore vote responses that are less or higher than our current term
+                            if msg.term == *self.senator.term.lock().await && vote_granted {
                                 self.votes_granted += 1;
 
                                 if self.votes_granted >= self.votes_needed {
@@ -93,7 +93,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Candidate<Req, Res, R> {
                         },
                         // if the heartbeat term is greater than or equal to our current term,
                         // we will become a follower, otherwise we will ignore it
-                        MessageType::Response(Response::Heartbeat) => if term >= *self.senator.term.lock().await {
+                        MessageType::Response(Response::Heartbeat) => if msg.term >= *self.senator.term.lock().await {
                             *self.senator.role.lock().await = Role::Follower;
                             break
                         }

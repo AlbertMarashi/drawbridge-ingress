@@ -13,10 +13,11 @@ use crate::{
 /// format of message:
 /// 4 bytes for length of message
 impl<S: Stream> Peer<S> {
-    pub fn new(id: NodeID, stream: S) -> Arc<Self> {
+    pub fn new(established_by: NodeID, peer_id: NodeID, stream: S) -> Arc<Self> {
         let (read_half, write_half) = tokio::io::split(stream);
         Arc::new(Self {
-            id,
+            peer_id,
+            established_by,
             read_half: Mutex::new(read_half),
             write_half: Mutex::new(write_half),
         })
@@ -53,5 +54,12 @@ impl<S: Stream> Peer<S> {
         write_half.write_all(&buf).await.map_err(|e| Error::IO(e))?;
 
         Ok(())
+    }
+}
+
+
+impl<S: Stream> Drop for Peer<S> {
+    fn drop(&mut self) {
+        println!("Dropping peer with id {} established {}", self.peer_id, self.established_by);
     }
 }

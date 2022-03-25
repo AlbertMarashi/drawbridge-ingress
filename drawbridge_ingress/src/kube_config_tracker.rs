@@ -6,17 +6,24 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use k8s_openapi::api::core::v1::{Service};
+use k8s_openapi::api::core::v1::{Pod};
 use k8s_openapi::api::networking::v1::Ingress;
+use kube::core::WatchEvent;
 use kube::{Api, Client, api::ListParams, runtime};
-use futures::{StreamExt};
+use futures::{StreamExt, TryStreamExt};
 use regex::Regex;
 use tokio::sync::RwLock;
 
 use crate::{IngressLoadBalancerError, Code};
 
+#[derive(Debug, Clone)]
+pub enum ChangeType {
+    BackendChanged,
+    PeerAdded(String),
+    PeerRemoved(String),
+}
 pub struct RoutingTable {
-    subscribers: RwLock<Vec<Box<dyn Fn() + Sync + Send>>>,
+    subscribers: RwLock<Vec<Box<dyn Fn(ChangeType) + Sync + Send>>>,
     pub backends_by_host: RwLock<HashMap<String, HashSet<Backend>>>, // there may be multiple backends for a host, so we need to store them in a map later
 }
 
@@ -30,7 +37,7 @@ impl RoutingTable {
 
     pub async fn start_watching(self: Arc<Self>) {
         let client = Client::try_default().await.expect("Expected a valid KUBECONFIG environment variable");
-        let _service_api: Api<Service> = Api::all(client.clone());
+        let pod_api: Api<Pod> = Api::all(client.clone());
         let ingress_api: Api<Ingress> = Api::all(client.clone());
         let mut handles = Vec::new();
 
@@ -123,26 +130,52 @@ impl RoutingTable {
                                 // add the backend to the host
                                 backends_for_host.insert(backend);
 
-                                rt.notify_subscribers().await;
+                                rt.notify_subscribers(ChangeType::BackendChanged).await;
                             }
                         }
                     }
                 }).await;
         }));
 
+        let rt = self.clone();
+
+        // watching for changes to peer ingress pods
+        handles.push(tokio::spawn(async move {
+            let mut stream = pod_api.watch(&ListParams::default().labels("app=drawbridge-ingress-service"), "0").await.unwrap().boxed();
+
+            while let Some(status) = stream.try_next().await.unwrap() {
+                match status {
+                    WatchEvent::Added(pod) => {
+                        let name = pod.metadata.name.clone().unwrap();
+                        println!("Peer: {:?} added", name);
+
+                        rt.notify_subscribers(ChangeType::PeerAdded(name)).await;
+                    },
+                    WatchEvent::Deleted(pod) => {
+                        let name = pod.metadata.name.clone().unwrap();
+                        println!("Peer: {:?} deleted", name);
+
+                        rt.notify_subscribers(ChangeType::PeerRemoved(name)).await;
+                    },
+                    _ => {}
+                }
+            }
+        }));
+
+
         // join all the futures
         futures::future::join_all(handles).await;
     }
 
-    pub async fn subscribe(&self, subscriber: Box<dyn Fn() + Sync + Send>) {
+    pub async fn subscribe(&self, subscriber: Box<dyn Fn(ChangeType) + Sync + Send>) {
         self.subscribers.write().await.push(subscriber);
     }
 
-    pub async fn notify_subscribers(&self) {
+    pub async fn notify_subscribers(&self, change_type: ChangeType) {
         let mut subscribers = self.subscribers.write().await;
 
         for subscriber in subscribers.iter_mut() {
-            subscriber();
+            subscriber(change_type.clone());
         }
     }
 

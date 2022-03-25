@@ -33,7 +33,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Leader<Req, Res, R> {
                 tokio::select! {
                     // we will send another heartbeat after each timeout
                     _ = timeout_fut => break,
-                    Message { term, from, msg, ..} = self.senator.rpc.recv_msg() => match msg {
+                    msg @ Message { term, from, ..} = self.senator.rpc.recv_msg() => match msg.msg {
                         MessageType::Request(Request::Heartbeat) => {
                             // we will reply with a heartbeat
                             // if the term is greater than ours, we will become a follower
@@ -51,7 +51,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Leader<Req, Res, R> {
                             }).await;
                         },
                         MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(from, term).await,
-                        MessageType::Request(Request::Custom(req)) => self.senator.handle_user_request(req).await,
+                        MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
                         MessageType::Response(Response::Heartbeat) => {},
                         MessageType::Response(Response::Custom(..)) => {},
                         MessageType::Response(Response::Vote { .. }) => {},
