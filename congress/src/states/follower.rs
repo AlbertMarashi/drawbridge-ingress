@@ -3,17 +3,17 @@ use std::sync::Arc;
 use tokio::time::Instant;
 
 use crate::{
-    types::{UserReq, UserRes, MessageType, Message},
+    types::{Message, MessageType, UserMsg},
     utils::get_random_timeout,
-    Request, Response, Role, Senator, RPC,
+    Role, Senator, RPC,
 };
 
-pub struct Follower<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
-    senator: Arc<Senator<Req, Res, R>>,
+pub struct Follower<Msg: UserMsg, R: RPC<Msg>> {
+    senator: Arc<Senator<Msg, R>>,
 }
 
-impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Follower<Req, Res, R> {
-    pub fn new(senator: Arc<Senator<Req, Res, R>>) -> Self {
+impl<Msg: UserMsg, R: RPC<Msg>> Follower<Msg, R> {
+    pub fn new(senator: Arc<Senator<Msg, R>>) -> Self {
         Self { senator }
     }
 
@@ -23,7 +23,6 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Follower<Req, Res, R> {
             self.senator.id,
             *self.senator.term.lock().await
         );
-        *self.senator.next_timeout.lock().await = Instant::now() + get_random_timeout();
         loop {
             match *self.senator.role.lock().await {
                 Role::Follower => {}
@@ -39,24 +38,15 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Follower<Req, Res, R> {
                 // we will sleep until the next timeout
                 _ = timeout_fut => *self.senator.role.lock().await = Role::Candidate,
                 msg @ Message { term, from, ..} = self.senator.rpc.recv_msg() => match msg.msg {
-                    MessageType::Request(Request::Heartbeat) => {
-                        // we will reply with a heartbeat response
-                        // but first set the timeout to the next timeout
-                        if term >= *self.senator.term.lock().await {
-                            *self.senator.term.lock().await = term;
-                            *self.senator.current_leader.lock().await = Some(from);
-                            *self.senator.next_timeout.lock().await = Instant::now() + get_random_timeout();
-                        }
-
-                        self.senator.rpc.send_msg(Message {
-                            from: self.senator.id,
-                            to: from,
-                            term,
-                            msg: MessageType::Response(Response::Heartbeat),
-                        }).await;
+                    // we will reply with a heartbeat response
+                    // but first set the timeout to the next timeout
+                    MessageType::LeaderHeartbeat => if term >= *self.senator.term.lock().await {
+                        *self.senator.term.lock().await = term;
+                        *self.senator.current_leader.lock().await = Some(from);
+                        *self.senator.next_timeout.lock().await = Instant::now() + get_random_timeout();
                     },
-                    MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(from, term).await,
-                    MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
+                    MessageType::VoteRequest => self.senator.handle_vote_request(from, term).await,
+                    MessageType::Custom(..) => self.senator.handle_user_message(msg).await,
                     _ => {}
                 }
             }

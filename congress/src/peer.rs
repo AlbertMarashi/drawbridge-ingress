@@ -6,8 +6,8 @@ use tokio::{
 };
 
 use crate::{
-    types::{Message, Peer, Stream},
-    Error, NodeID, UserReq, UserRes,
+    types::{Message, Peer, Stream, UserMsg},
+    Error, NodeID
 };
 
 /// format of message:
@@ -23,7 +23,7 @@ impl<S: Stream> Peer<S> {
         })
     }
 
-    pub async fn read_msg<Req: UserReq, Res: UserRes>(&self) -> Result<Message<Req, Res>, Error> {
+    pub async fn read_msg<Msg: UserMsg>(&self) -> Result<Message<Msg>, Error> {
         let mut read_half = self.read_half.lock().await;
 
         let mut buf = [0u8; 4];
@@ -34,15 +34,15 @@ impl<S: Stream> Peer<S> {
         let mut buf = vec![0u8; msg_len as usize];
 
         read_half.read_exact(&mut buf).await.map_err(|e| Error::IO(e))?;
-        let msg = bincode::deserialize::<Message<Req, Res>>(&buf)
+        let msg = bincode::deserialize::<Message<Msg>>(&buf)
             .map_err(|_| Error::CouldNotDeserialize)?;
 
         Ok(msg)
     }
 
-    pub async fn send_msg<Req: UserReq, Res: UserRes>(
+    pub async fn send_msg<Msg: UserMsg>(
         &self,
-        msg: Message<Req, Res>,
+        msg: Message<Msg>,
     ) -> Result<(), Error> {
         let mut write_half = self.write_half.lock().await;
 

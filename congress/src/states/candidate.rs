@@ -3,19 +3,18 @@ use std::sync::Arc;
 use tokio::time::Instant;
 
 use crate::{
-    types::{UserReq, UserRes, Message, MessageType},
-    utils::get_random_timeout,
-    Request, Response, Role, Senator, RPC,
+    types::{MessageType, UserMsg},
+    utils::get_random_timeout, Role, Senator, RPC,
 };
 
-pub struct Candidate<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
-    senator: Arc<Senator<Req, Res, R>>,
+pub struct Candidate<Msg: UserMsg, R: RPC<Msg>> {
+    senator: Arc<Senator<Msg, R>>,
     votes_granted: u64,
     votes_needed: u64, // half the total number of nodes, rounded up
 }
 
-impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Candidate<Req, Res, R> {
-    pub fn new(senator: Arc<Senator<Req, Res, R>>) -> Self {
+impl<Msg: UserMsg, R: RPC<Msg>> Candidate<Msg, R> {
+    pub fn new(senator: Arc<Senator<Msg, R>>) -> Self {
         Self {
             senator,
             votes_granted: 0,
@@ -50,7 +49,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Candidate<Req, Res, R> {
             self.votes_needed = self.senator.rpc.members().await.len() as u64 / 2 + 1 as u64;
 
             // broadcast out a request vote request to all other nodes
-            self.senator.broadcast_request(Request::VoteRequest).await;
+            self.senator.broadcast_message(MessageType::VoteRequest).await;
 
             let timeout = Instant::now() + get_random_timeout();
 
@@ -61,43 +60,27 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Candidate<Req, Res, R> {
                     // election has timed out, break to outer loop;
                     _ = timeout_fut => break,
                     msg = self.senator.rpc.recv_msg() => match msg.msg {
-                        MessageType::Request(Request::Heartbeat) => {
-                            // if a term is greater than ours, we will become a follower
-                            // and set our term to theirs, and leader to them.
-                            if msg.term > *self.senator.term.lock().await {
-                                *self.senator.term.lock().await = msg.term;
-                                *self.senator.current_leader.lock().await = Some(msg.from);
-                                *self.senator.role.lock().await = Role::Follower;
-                            }
-                            self.senator.rpc.send_msg(Message {
-                                from: self.senator.id,
-                                to: msg.from,
-                                term: *self.senator.term.lock().await,
-                                msg: MessageType::Response(Response::Heartbeat)
-                            }).await
-                        },
-                        MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(msg.from, msg.term).await,
-                        MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
-                        MessageType::Response(Response::Vote { vote_granted }) => {
-                            // ignore vote responses that are less or higher than our current term
-                            if msg.term == *self.senator.term.lock().await && vote_granted {
-                                self.votes_granted += 1;
-
-                                if self.votes_granted >= self.votes_needed {
-                                    // we have enough votes to become leader
-                                    *self.senator.role.lock().await = Role::Leader;
-                                    *self.senator.current_leader.lock().await = Some(self.senator.id);
-                                    break;
-                                }
-                            }
-                        },
-                        // if the heartbeat term is greater than or equal to our current term,
-                        // we will become a follower, otherwise we will ignore it
-                        MessageType::Response(Response::Heartbeat) => if msg.term >= *self.senator.term.lock().await {
+                        // if a term is greater than ours, we will become a follower
+                        // and set our term to theirs, and leader to them.
+                        MessageType::LeaderHeartbeat => if msg.term >= *self.senator.term.lock().await {
+                            *self.senator.term.lock().await = msg.term;
+                            *self.senator.current_leader.lock().await = Some(msg.from);
                             *self.senator.role.lock().await = Role::Follower;
                             break
+                        },
+                        MessageType::VoteRequest => self.senator.handle_vote_request(msg.from, msg.term).await,
+                        // ignore vote responses that are less or higher than our current term
+                        MessageType::VoteResponse { vote_granted } => if msg.term == *self.senator.term.lock().await && vote_granted {
+                            self.votes_granted += 1;
+
+                            if self.votes_granted >= self.votes_needed {
+                                // we have enough votes to become leader
+                                *self.senator.role.lock().await = Role::Leader;
+                                *self.senator.current_leader.lock().await = Some(self.senator.id);
+                                break
+                            }
                         }
-                        MessageType::Response(Response::Custom(..)) => {},
+                        MessageType::Custom(..) => self.senator.handle_user_message(msg).await,
                     },
                 }
             }

@@ -24,9 +24,10 @@ use tokio_retry::{strategy::{jitter, ExponentialBackoff}, Retry};
 use crate::{certificate_generation::{LetsEncrypt, CertificateStateMinimal}, kube_config_tracker::RoutingTable, error::IngressLoadBalancerError};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-enum Sends {
+enum IngressMessage {
     RequestState,
-    ApplyState(CertificateStateMinimal)
+    ApplyState(CertificateStateMinimal),
+    State(CertificateStateMinimal),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -34,8 +35,8 @@ enum Receives {
     State(CertificateStateMinimal),
 }
 
-type IngressRPCNetwork = RPCNetwork<Sends, Receives, TcpStream>;
-type IngressSenator = Senator<Sends, Receives, IngressRPCNetwork>;
+type IngressRPCNetwork = RPCNetwork<IngressMessage, TcpStream>;
+type IngressSenator = Senator<IngressMessage, IngressRPCNetwork>;
 
 pub struct LeadershipSystem {
     current_pod_name: String,
@@ -106,7 +107,9 @@ impl LeadershipSystem {
         });
 
         self.senator.on_role(|role| {
-
+            if role == NodeID::Leader {
+                // task.await.unwrap();
+            }
         }).await;
 
         self.senator.on_message(|message| {

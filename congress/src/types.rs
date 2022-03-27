@@ -5,20 +5,18 @@ use tokio::{sync::{Mutex, RwLock}, time::Instant, io::{WriteHalf, ReadHalf, Asyn
 
 pub type NodeID = u64;
 
-pub trait Stream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {}
-pub trait UserReq: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
-pub trait UserRes: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
+pub trait UserMsg: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
+impl<T> UserMsg for T where T: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
 
-impl<T> UserReq for T where T: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
-impl<T> UserRes for T where T: Clone + Debug + Send + Sync + Serialize + DeserializeOwned + 'static {}
+pub trait Stream: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {}
 impl<T> Stream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static {}
 
 /// Remote procedure call api trait
 #[async_trait]
-pub trait RPC<Req: UserReq, Res: UserRes>: Send + Sync + 'static {
+pub trait RPC<Msg: UserMsg>: Send + Sync + 'static {
     async fn members(&self) -> Vec<NodeID>;
-    async fn recv_msg(&self) -> Message<Req, Res>;
-    async fn send_msg(&self, msg: Message<Req, Res>);
+    async fn recv_msg(&self) -> Message<Msg>;
+    async fn send_msg(&self, msg: Message<Msg>);
     /// This ID should never change
     fn our_id(&self) -> NodeID;
 }
@@ -31,7 +29,7 @@ pub enum Role {
 }
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
+pub struct Senator<Msg: UserMsg, R: RPC<Msg>> {
     pub id: NodeID,
     pub rpc: Arc<R>,
     pub role: Mutex<Role>,
@@ -39,40 +37,26 @@ pub struct Senator<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
     pub voted_for: Mutex<Option<NodeID>>,
     pub next_timeout: Mutex<Instant>,
     pub current_leader: Mutex<Option<NodeID>>,
-    pub phantom_res: std::marker::PhantomData<Res>,
     #[derivative(Debug="ignore")]
     pub on_role: RwLock<Vec<Box<dyn Fn(Role) + Send + Sync + 'static>>>,
     #[derivative(Debug="ignore")]
-    pub on_message: RwLock<Vec<Box<dyn Fn(Message<Req, Res>) + Send + Sync + 'static>>>,
+    pub on_message: RwLock<Vec<Box<dyn Fn(Message<Msg>) + Send + Sync + 'static>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Message<Req, Res> {
+pub struct Message<UserMsg> {
     pub from: NodeID,
     pub to : NodeID,
     pub term: u64,
-    pub msg: MessageType<Req, Res>,
+    pub msg: MessageType<UserMsg>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum MessageType<Req, Res> {
-
-    Request(Request<Req>),
-    Response(Response<Res>),
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum Response<Res> {
-    Heartbeat,
-    Vote { vote_granted: bool },
-    Custom(Res),
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum Request<Req> {
-    Heartbeat,
+pub enum MessageType<UserMsg> {
+    LeaderHeartbeat,
     VoteRequest,
-    Custom(Req),
+    VoteResponse { vote_granted: bool },
+    Custom(UserMsg)
 }
 #[derive(Debug)]
 pub struct Peer<S: Stream> {

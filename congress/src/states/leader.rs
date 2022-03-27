@@ -3,21 +3,25 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::Instant;
 
 use crate::{
-    types::{Message, MessageType, UserReq, UserRes},
-    Request, Response, Role, Senator, RPC,
+    types::{Message, MessageType, UserMsg},
+    Role, Senator, RPC,
 };
 
-pub struct Leader<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> {
-    senator: Arc<Senator<Req, Res, R>>,
+pub struct Leader<Msg: UserMsg, R: RPC<Msg>> {
+    senator: Arc<Senator<Msg, R>>,
 }
 
-impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Leader<Req, Res, R> {
-    pub fn new(senator: Arc<Senator<Req, Res, R>>) -> Self {
+impl<Msg: UserMsg, R: RPC<Msg>> Leader<Msg, R> {
+    pub fn new(senator: Arc<Senator<Msg, R>>) -> Self {
         Self { senator }
     }
 
     pub async fn run(self) {
-        println!("Node {:?} became leader for term {}", self.senator.id, *self.senator.term.lock().await);
+        println!(
+            "Node {:?} became leader for term {}",
+            self.senator.id,
+            *self.senator.term.lock().await
+        );
 
         loop {
             match *self.senator.role.lock().await {
@@ -26,7 +30,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Leader<Req, Res, R> {
             }
             let timeout = Instant::now() + Duration::from_millis(50);
 
-            self.senator.broadcast_request(Request::Heartbeat).await;
+            self.senator.broadcast_message(MessageType::LeaderHeartbeat).await;
 
             loop {
                 let timeout_fut = tokio::time::sleep_until(timeout);
@@ -34,27 +38,16 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Leader<Req, Res, R> {
                     // we will send another heartbeat after each timeout
                     _ = timeout_fut => break,
                     msg @ Message { term, from, ..} = self.senator.rpc.recv_msg() => match msg.msg {
-                        MessageType::Request(Request::Heartbeat) => {
-                            // we will reply with a heartbeat
-                            // if the term is greater than ours, we will become a follower
-                            // but first set the timeout to the next timeout
-                            if term > *self.senator.term.lock().await {
-                                *self.senator.term.lock().await = term;
-                                *self.senator.role.lock().await = Role::Follower;
-                            }
-
-                            self.senator.rpc.send_msg(Message {
-                                from: self.senator.id,
-                                to: from,
-                                term,
-                                msg: MessageType::Response(Response::Heartbeat)
-                            }).await;
+                        // we will reply with a heartbeat
+                        // if the term is greater than ours, we will become a follower
+                        // but first set the timeout to the next timeout
+                        MessageType::LeaderHeartbeat => if term > *self.senator.term.lock().await {
+                            *self.senator.term.lock().await = term;
+                            *self.senator.role.lock().await = Role::Follower;
                         },
-                        MessageType::Request(Request::VoteRequest) => self.senator.handle_vote_request(from, term).await,
-                        MessageType::Request(Request::Custom(..)) => self.senator.handle_user_message(msg).await,
-                        MessageType::Response(Response::Heartbeat) => {},
-                        MessageType::Response(Response::Custom(..)) => {},
-                        MessageType::Response(Response::Vote { .. }) => {},
+                        MessageType::VoteRequest => self.senator.handle_vote_request(from, term).await,
+                        MessageType::Custom(..) => self.senator.handle_user_message(msg).await,
+                        MessageType::VoteResponse { .. } => {},
                     }
                 };
             }

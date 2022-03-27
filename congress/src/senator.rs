@@ -13,11 +13,11 @@ use tokio::time::Duration;
 
 use crate::{
     states::{candidate::Candidate, follower::Follower, leader::Leader},
-    types::{Message, MessageType, Peer, Stream, UserReq, UserRes},
-    Error, NodeID, Request, Response, Role, Senator, RPC,
+    types::{Message, MessageType, Peer, Stream, UserMsg},
+    Error, NodeID, Role, Senator, RPC, utils::get_random_timeout,
 };
 
-impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
+impl<Msg: UserMsg, R: RPC<Msg>> Senator<Msg, R> {
     pub fn start(self: &Arc<Self>) -> JoinHandle<()> {
         let senator = self.clone();
 
@@ -35,10 +35,13 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
                     .for_each(|f| f(role.clone()));
 
                 match role {
-                    Role::Leader => Leader::new(senator).run().await,
-                    Role::Follower => Follower::new(senator).run().await,
-                    Role::Candidate => Candidate::new(senator).run().await,
+                    Role::Leader => Leader::new(senator.clone()).run().await,
+                    Role::Follower => Follower::new(senator.clone()).run().await,
+                    Role::Candidate => Candidate::new(senator.clone()).run().await,
                 }
+
+                // reset the next timeout in case we are a follower
+                *senator.next_timeout.lock().await = Instant::now() + get_random_timeout();
             }
         })
     }
@@ -48,7 +51,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
         on_role.push(Box::new(cb))
     }
 
-    pub async fn on_message<F: Fn(Message<Req, Res>) + Send + Sync + 'static>(
+    pub async fn on_message<F: Fn(Message<Msg>) + Send + Sync + 'static>(
         self: &Arc<Self>,
         cb: F,
     ) {
@@ -56,7 +59,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
         on_message.push(Box::new(cb))
     }
 
-    pub async fn handle_user_message(self: &Arc<Self>, msg: Message<Req, Res>) {
+    pub async fn handle_user_message(self: &Arc<Self>, msg: Message<Msg>) {
         // lock the message handlers
         let mut on_message = self.on_message.write().await;
 
@@ -75,9 +78,9 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
                         term: *our_term,
                         from: self.id,
                         to,
-                        msg: MessageType::Response(Response::Vote {
+                        msg: MessageType::VoteResponse {
                             vote_granted: false,
-                        }),
+                        },
                     }
                 // if we observe a term greater than our own, we will become a follower
                 } else {
@@ -94,9 +97,9 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
                             term: *our_term,
                             from: self.id,
                             to,
-                            msg: MessageType::Response(Response::Vote {
+                            msg: MessageType::VoteResponse {
                                 vote_granted: false,
-                            }),
+                            }
                         },
                         // if we have not voted for anyone, we will accept
                         None => {
@@ -105,7 +108,7 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
                                 term: *our_term,
                                 to,
                                 from: self.id,
-                                msg: MessageType::Response(Response::Vote { vote_granted: true }),
+                                msg: MessageType::VoteResponse { vote_granted: true },
                             }
                         }
                     }
@@ -114,12 +117,12 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
             .await;
     }
 
-    pub async fn broadcast_request(self: &Arc<Self>, req: Request<Req>) {
+    pub async fn broadcast_message(self: &Arc<Self>, msg: MessageType<Msg>) {
         let term = self.term.lock().await.clone();
         let clients = self.rpc.members().await;
 
         for peer_id in clients.into_iter() {
-            let req = req.clone();
+            let msg = msg.clone();
             let senator = self.clone();
             tokio::spawn(async move {
                 senator
@@ -128,23 +131,22 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
                         from: senator.id,
                         to: peer_id,
                         term,
-                        msg: MessageType::Request(req.clone()),
+                        msg
                     })
                     .await
             });
         }
     }
 
-    pub fn new(delay: Duration, rpc: Arc<R>) -> Arc<Self> {
+    pub fn new(minimum_delay: Duration, rpc: Arc<R>) -> Arc<Self> {
         Arc::new(Senator {
             id: rpc.our_id(),
             rpc,
             role: Mutex::new(Role::Follower),
             term: Mutex::new(0),
             voted_for: Mutex::new(None),
-            next_timeout: Mutex::new(Instant::now() + delay),
+            next_timeout: Mutex::new(Instant::now() + minimum_delay + get_random_timeout()),
             current_leader: Mutex::new(None),
-            phantom_res: std::marker::PhantomData,
             on_message: RwLock::new(Vec::new()),
             on_role: RwLock::new(Vec::new()),
         })
@@ -154,27 +156,27 @@ impl<Req: UserReq, Res: UserRes, R: RPC<Req, Res>> Senator<Req, Res, R> {
 #[derive(Debug)]
 pub struct Close;
 
-pub struct RPCNetwork<Req: UserReq, Res: UserRes, S: Stream> {
+pub struct RPCNetwork<Msg: UserMsg, S: Stream> {
     pub peers: RwLock<HashMap<NodeID, (Sender<Close>, Receiver<Close>, Arc<Peer<S>>)>>,
-    pub phantom_req: std::marker::PhantomData<Req>,
-    pub msg_recv: Mutex<mpsc::UnboundedReceiver<Message<Req, Res>>>,
-    pub msg_send: mpsc::UnboundedSender<Message<Req, Res>>,
+    pub phantom_req: std::marker::PhantomData<Msg>,
+    pub msg_recv: Mutex<mpsc::UnboundedReceiver<Message<Msg>>>,
+    pub msg_send: mpsc::UnboundedSender<Message<Msg>>,
     pub our_id: NodeID,
 }
 
 #[async_trait]
-impl<Req: UserReq, Res: UserRes, S: Stream> RPC<Req, Res> for RPCNetwork<Req, Res, S> {
-    async fn recv_msg(&self) -> Message<Req, Res> {
+impl<Msg: UserMsg, S: Stream> RPC<Msg> for RPCNetwork<Msg, S> {
+    async fn recv_msg(&self) -> Message<Msg> {
         match self.msg_recv.lock().await.recv().await {
             Some(msg) => msg,
             None => panic!("msg_send dropped"),
         }
     }
 
-    async fn send_msg(&self, msg: Message<Req, Res>) -> () {
+    async fn send_msg(&self, msg: Message<Msg>) -> () {
         let to = msg.to;
         match self.peers.read().await.get(&to) {
-            Some((_, _, peer)) => match peer.send_msg::<Req, Res>(msg).await {
+            Some((_, _, peer)) => match peer.send_msg::<Msg>(msg).await {
                 Ok(()) => return,
                 Err(err) => dbg!("Could not send message: Peer probably closed connection", err),
             },
@@ -194,7 +196,7 @@ impl<Req: UserReq, Res: UserRes, S: Stream> RPC<Req, Res> for RPCNetwork<Req, Re
     }
 }
 
-impl<Req: UserReq, Res: UserRes, S: Stream> RPCNetwork<Req, Res, S> {
+impl<Msg: UserMsg, S: Stream> RPCNetwork<Msg, S> {
     pub fn new(our_id: NodeID) -> Arc<Self> {
         let (msg_send, msg_recv) = mpsc::unbounded_channel();
         Arc::new(RPCNetwork {

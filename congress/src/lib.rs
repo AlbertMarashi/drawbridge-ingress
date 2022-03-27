@@ -12,12 +12,8 @@ pub use types::{
     RPC,
     Role,
     Senator,
-    Request,
-    Response,
     NodeID,
     Peer,
-    UserReq,
-    UserRes,
     MessageType,
     Message
 };
