@@ -111,7 +111,7 @@ impl LeadershipSystem {
 
         let clone = self.clone();
 
-        self.senator.on_role(move|_| {\
+        self.senator.on_role(move|_| {
             let clone = clone.clone();
             tokio::task::spawn(async move {
                 if let Err(e) = clone.handle_change().await {
