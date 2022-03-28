@@ -13,14 +13,21 @@ use kube::{Api, Client, api::ListParams, runtime};
 use futures::{StreamExt, TryStreamExt};
 use regex::Regex;
 use tokio::sync::RwLock;
+use tokio_retry::strategy::FibonacciBackoff;
 
+use crate::lets_encrypt::NAMESPACE;
 use crate::{IngressLoadBalancerError, Code};
 
 #[derive(Debug, Clone)]
 pub enum ChangeType {
     BackendChanged,
-    PeerAdded(String),
-    PeerRemoved(String),
+    PeerAdded {
+        addr: String,
+        name: String,
+    },
+    PeerRemoved {
+        name: String
+    },
 }
 pub struct RoutingTable {
     subscribers: RwLock<Vec<Box<dyn Fn(ChangeType) + Sync + Send>>>,
@@ -37,7 +44,7 @@ impl RoutingTable {
 
     pub async fn start_watching(self: Arc<Self>) {
         let client = Client::try_default().await.expect("Expected a valid KUBECONFIG environment variable");
-        let pod_api: Api<Pod> = Api::all(client.clone());
+        let pod_api: Api<Pod> = Api::namespaced(client.clone(), NAMESPACE);
         let ingress_api: Api<Ingress> = Api::all(client.clone());
         let mut handles = Vec::new();
 
@@ -110,11 +117,12 @@ impl RoutingTable {
                                 let service_name = &backend.service.as_ref().unwrap().name;
                                 let service_port = backend.service.as_ref().unwrap().port.as_ref().unwrap();
                                 let path_prefix = path.path.as_ref().unwrap();
+                                let namespace = resource.metadata.namespace.clone().unwrap();
 
                                 let backend = Backend::with_prefix(
                                     host.to_string(),
                                     path_prefix.to_string(),
-                                    service_name.to_string(),
+                                    format!("{}.{}", service_name.to_string(), namespace),
                                     service_port.number.unwrap() as u16);
 
                                 let mut backends = rt.backends_by_host.write().await;
@@ -143,20 +151,41 @@ impl RoutingTable {
         handles.push(tokio::spawn(async move {
             let mut stream = pod_api.watch(&ListParams::default().labels("app=drawbridge-ingress-service"), "0").await.unwrap().boxed();
 
+            let get_pod_ip = |name: String| {
+                let retry_stategy = FibonacciBackoff::from_millis(100)
+                    .factor(1)
+                    .take(10);
+                let pod_api = pod_api.clone();
+                async move {
+                    tokio_retry::Retry::spawn(retry_stategy, || {
+                        async {
+                            // get the pod
+                            let pod = pod_api.get(&name)
+                                .await
+                                .map_err(|e| IngressLoadBalancerError::Other(format!("Failed to get pod: {}", e).into()))?;
+
+                            // get the pod IP
+                            let pod_ip = pod
+                                .status.ok_or(IngressLoadBalancerError::Other("Pod has no status".into()))?
+                                .pod_ip.ok_or(IngressLoadBalancerError::Other("Pod has no IP".into()))?;
+
+                            Ok::<String, IngressLoadBalancerError>(pod_ip)
+                        }
+                    }).await
+                }
+            };
+
             while let Some(status) = stream.try_next().await.unwrap() {
                 match status {
                     WatchEvent::Added(pod) => {
-                        let name = pod.metadata.name.clone().unwrap();
-                        println!("Peer: {:?} added", name);
-
-                        rt.notify_subscribers(ChangeType::PeerAdded(name)).await;
+                        // The IP might not be ready yet, so we retry a few times
+                        let name = pod.metadata.name.unwrap();
+                        match get_pod_ip(name.clone()).await {
+                            Ok(addr) => rt.notify_subscribers(ChangeType::PeerAdded { addr, name }).await,
+                            Err(e) => println!("Failed to add, could not get it's IP: {}", e)
+                        }
                     },
-                    WatchEvent::Deleted(pod) => {
-                        let name = pod.metadata.name.clone().unwrap();
-                        println!("Peer: {:?} deleted", name);
-
-                        rt.notify_subscribers(ChangeType::PeerRemoved(name)).await;
-                    },
+                    WatchEvent::Deleted(pod) => rt.notify_subscribers(ChangeType::PeerRemoved { name: pod.metadata.name.unwrap() }).await,
                     _ => {}
                 }
             }

@@ -30,5 +30,5 @@ pub enum Error {
     UnexpectedEOF,
     ResponseTimeout,
     ChannelError,
-    PeerNotFound
+    PeerNotFound,
 }

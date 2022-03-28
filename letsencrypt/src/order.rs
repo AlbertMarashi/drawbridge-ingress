@@ -1,11 +1,11 @@
-use std::future::Future;
+use std::sync::Arc;
 
 use hyper::{Method};
 use serde_json::json;
 
 use crate::{
     error::LetsEncryptError,
-    account::Account, challenge::Http01Challenge,
+    account::{Account, ServesChallenge}, challenge::Http01Challenge,
 };
 
 
@@ -15,14 +15,11 @@ pub struct Identifier {
     pub value: String,
 }
 
-pub async fn new_order<F, Fut>(
+pub async fn new_order<S: ServesChallenge>(
     account: &Account,
     domains: &[String],
-    handle_challenge: F
-) -> Result<(String, String), LetsEncryptError>
-where F: Fn(Http01Challenge) -> Fut,
-    Fut: Future<Output = ()>
-{
+    challenge_handler: Arc<S>,
+) -> Result<(String, String), LetsEncryptError> {
     let domain_identifiers = domains
         .iter()
         .map(|domain| json!({ "type": "dns", "value": domain }))
@@ -69,7 +66,7 @@ where F: Fn(Http01Challenge) -> Fut,
 
     for challenge in challenges {
         let mut i = 1;
-        handle_challenge(challenge.clone()).await;
+        challenge_handler.serve_challenge(challenge.clone()).await;
 
         loop {
             i += 1;

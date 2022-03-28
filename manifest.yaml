@@ -15,11 +15,12 @@ spec:
       containers:
         - name: drawbridge-ingress-service
           image: 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image
+          # image: ingress-image
           env:
-            - name: CURRENT_POD_IP
+            - name: CURRENT_POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: status.podIP
+                  fieldPath: metadata.name
           resources:
             limits:
               memory: "30Mi"

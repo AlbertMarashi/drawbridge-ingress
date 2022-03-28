@@ -25,8 +25,9 @@ impl<Msg: UserMsg, R: RPC<Msg>> Senator<Msg, R> {
             loop {
                 // each loop is a new term
                 let senator = senator.clone();
-                let role = (*senator.role.lock().await).clone();
+                let role = { (*senator.role.lock().await).clone() };
 
+                // notify all on_role listeners that the role has changed
                 senator
                     .on_role
                     .read()
@@ -34,6 +35,7 @@ impl<Msg: UserMsg, R: RPC<Msg>> Senator<Msg, R> {
                     .iter()
                     .for_each(|f| f(role.clone()));
 
+                // run the state for this loop
                 match role {
                     Role::Leader => Leader::new(senator.clone()).run().await,
                     Role::Follower => Follower::new(senator.clone()).run().await,
@@ -267,7 +269,9 @@ impl<Msg: UserMsg, S: Stream> RPCNetwork<Msg, S> {
         let mut peers = self.peers.write().await;
 
         match peers.get_mut(&new_peer.peer_id) {
-            // there is already a peer connected with this id
+            // there is already a peer connected with this the same id
+            // if it is the same established_by, then we have a duplicate connection
+            // so we return an error
             Some((_, _, existing_peer)) => if new_peer.established_by == existing_peer.established_by {
                 Err(Error::Other(format!(
                 "Peer tried to connect to us with established_by({}) which is the same as the one in the map ({})",

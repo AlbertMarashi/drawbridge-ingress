@@ -4,14 +4,14 @@ use std::sync::Arc;
 use hyper::header::{UPGRADE};
 use hyper::{Request, Response, Client};
 
+use crate::certificate_state::CertificateState;
 use crate::kube_config_tracker::RoutingTable;
-use crate::certificate_generation::LetsEncrypt;
 use crate::{IngressLoadBalancerError, Code};
 
 pub async fn proxy_request(
     rt: Arc<RoutingTable>,
     req: Request<Body>,
-    lets_encrypt: Arc<LetsEncrypt>,
+    cert_state: Arc<CertificateState>,
 ) -> Result<Response<Body>, !> {
     // http2 uses ":authority" as the host header, and http uses "host"
     // so we need to check both
@@ -43,7 +43,7 @@ pub async fn proxy_request(
         // print path
         println!("{} {}", host, path);
 
-        if let Some(res) = lets_encrypt.handle_if_challenge(host, path).await {
+        if let Some(res) = cert_state.handle_if_challenge(host, path).await {
             return Ok(res);
         }
 

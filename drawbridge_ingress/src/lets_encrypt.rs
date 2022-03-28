@@ -1,21 +1,18 @@
+use crate::certificate_state::{CertificateState, CertKey, Host, CertData, cert_key_from};
+use crate::error::{IngressLoadBalancerError, Code};
 use crate::kube_config_tracker::RoutingTable;
-use hyper::{Body, Response};
 use k8s_openapi::api::core::v1::Secret;
 use kube::ResourceExt;
 use kube::{api::PostParams, Api, Client};
-use letsencrypt::account::Account;
-use letsencrypt::challenge::Http01Challenge;
+use letsencrypt::account::{Account, ServesChallenge};
 use letsencrypt::directory::{Directory, PRODUCTON, STAGING};
-use rustls::ServerConfig;
-use rustls::sign::CertifiedKey;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tls_acceptor::tls_acceptor::ResolvesServerConf;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
+use std::sync::Arc;
+use std::{collections::HashMap};
 
-const NAMESPACE: &str = "drawbridge-ingress";
+pub const NAMESPACE: &str = "drawbridge-ingress";
 const ENV: Environment = Environment::Staging;
+pub type SecretCerts = Vec<(Host, CertData)>;
 
 #[allow(dead_code)]
 enum Environment {
@@ -39,180 +36,29 @@ impl Environment {
     }
 }
 
-pub type Host = String;
-pub type Path = String;
-pub struct LetsEncrypt {
+pub struct CertGenerator {
     pub account: Account,
-    pub state: Arc<RwLock<CertificateState>>,
     pub routing_table: Arc<RoutingTable>,
     pub kube_api: Client,
+    pub state: Arc<CertificateState>,
 }
 
-pub struct CertificateState {
-    pub certs: RwLock<HashMap<String, CertKey>>,
-    pub challenges: RwLock<HashMap<(Host, Path), String>>,
-}
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CertificateStateMinimal {
-    pub certs: HashMap<String, CertKey>,
-    pub challenges: HashMap<(Host, Path), String>,
-}
-
-impl CertificateState {
-    pub async fn to_minimal(&self) -> CertificateStateMinimal {
-        CertificateStateMinimal {
-            certs: self.certs.read().await.clone(),
-            challenges: self.challenges.read().await.clone(),
-        }
-    }
-}
-
-impl From<CertificateStateMinimal> for CertificateState {
-    fn from(state: CertificateStateMinimal) -> Self {
-        CertificateState {
-            certs: RwLock::new(state.certs),
-            challenges: RwLock::new(state.challenges),
-        }
-    }
-}
-
-impl Serialize for CertKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(Serialize)]
-        struct CertKeyMinimal {
-            pub certs: Vec<Vec<u8>>,
-            pub private_key: Vec<u8>,
-        }
-
-        let cert_key_minimal = CertKeyMinimal {
-            certs: self.certs.clone(),
-            private_key: self.private_key.clone(),
-        };
-
-        cert_key_minimal.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for CertKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct CertKeyMinimal {
-            pub certs: Vec<Vec<u8>>,
-            pub private_key: Vec<u8>,
-        }
-
-        let cert_key_minimal = CertKeyMinimal::deserialize(deserializer)?;
-
-        Ok(cert_key_from(
-            cert_key_minimal.certs,
-            cert_key_minimal.private_key,
-        ))
-    }
-}
-
-#[derive(Clone)]
-pub struct CertKey {
-    // DER encoded
-    pub certs: Vec<Vec<u8>>,
-    pub private_key: Vec<u8>,
-    pub certified_key: Arc<CertifiedKey>,
-}
-
-impl std::fmt::Debug for CertKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "CertKey {{ certs: {:?}, private_key: {:?} }}",
-            self.certs, self.private_key
-        )
-    }
-}
-
-pub type SecretCerts = Vec<(Host, CertData)>;
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CertData {
-    pub private_key: Vec<u8>,
-    pub certs: Vec<Vec<u8>>,
-}
-
-fn cert_key_from(certs: Vec<Vec<u8>>, private_key: Vec<u8>) -> CertKey {
-    let key = rustls::sign::RsaSigningKey::new(&rustls::PrivateKey(private_key.clone())).unwrap();
-
-    CertKey {
-        certified_key: Arc::new(CertifiedKey::new(
-            certs
-                .iter()
-                .map(|cert| rustls::Certificate(cert.clone()))
-                .collect(),
-            Arc::new(key),
-        )),
-        certs,
-        private_key,
-    }
-}
-
-#[async_trait::async_trait]
-impl ResolvesServerConf for LetsEncrypt {
-    async fn resolve_server_config(&self, hello: &rustls::server::ClientHello) -> Option<Arc<ServerConfig>> {
-        let name = hello.server_name();
-
-        match name {
-            Some(name) => {
-                let state = self.state.clone();
-                let state = state.read().await;
-                let certs = state.certs.read().await;
-                let cert = certs.get(name);
-
-                match cert {
-                    Some(cert) => {
-                        let mut cfg = rustls::ServerConfig::builder()
-                            .with_safe_default_cipher_suites()
-                            .with_safe_default_kx_groups()
-                            .with_safe_default_protocol_versions()
-                            .unwrap()
-                            .with_no_client_auth()
-                            .with_single_cert(cert.certs.iter()
-                            .map(|cert| rustls::Certificate(cert.clone()))
-                            .collect(), rustls::PrivateKey(cert.private_key.clone()))
-                            .unwrap();
-
-                        cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-
-                        Some(Arc::new(cfg))
-                    }
-                    None => None,
-                }
-            }
-            None => None,
-        }
-    }
-}
-
-impl LetsEncrypt {
-    pub async fn setup(rt: Arc<RoutingTable>) -> Self {
+impl CertGenerator {
+    pub async fn create(rt: Arc<RoutingTable>, state: Arc<CertificateState>) -> Arc<Self> {
         let mut kube_api = Client::try_default()
             .await
             .expect("Expected a valid KUBECONFIG environment variable");
         let account = Self::get_account(&mut kube_api).await;
-        let certs = Self::get_certs(&mut kube_api).await;
+        let certs = Self::get_certs(&kube_api).await;
+        *state.certs.write().await = certs;
 
-        Self {
+        Arc::new(Self {
+            state,
             account,
-            state: Arc::new(RwLock::new(CertificateState {
-                certs: RwLock::new(certs),
-                challenges: RwLock::new(HashMap::new()),
-            })),
             routing_table: rt,
             kube_api,
-        }
+        })
     }
 
     /// we want to check if there is an existing account in the kubernetes secrets
@@ -310,53 +156,22 @@ impl LetsEncrypt {
         map
     }
 
-    #[inline]
-    pub async fn handle_if_challenge(&self, host: &str, path: &str) -> Option<Response<Body>> {
-        let state = self.state.read().await;
-        if let Some(challenge) = state
-            .challenges
-            .read()
-            .await
-            .get(&(host.to_string(), path.to_string()))
-        {
-            return Some(Response::new(Body::from(challenge.clone())));
-        }
-        None
-    }
-
-    pub async fn check_for_new_certificates(&self) {
+    pub async fn check_for_new_certificates<S: ServesChallenge> (&self, server: Arc<S>) -> Result<(), IngressLoadBalancerError> {
         let backends = self.routing_table.backends_by_host.read().await;
-        let state = self.state.read().await;
-
-        let mut certs = state.certs.write().await;
+        let mut certs = self.state.certs.write().await;
 
         for (host, _backend) in backends.iter() {
             let cert = certs.get(host);
             if cert.is_none() {
                 let cert = self
                     .account
-                    .generate_certificate(
-                    &[host.to_string()],
-                    |Http01Challenge {
-                            contents,
-                            domain,
-                            path,
-                            ..
-                        }| {
-                            let state = self.state.clone();
-                            async move {
-                                let state = state.write().await;
-
-                                let mut challenges = state.challenges.write().await;
-                                challenges.insert((domain, path), contents);
-                            }
-                        },
-                    )
+                    .generate_certificate( &[host.to_string()], server.clone())
                     .await
-                    .expect("Expected a valid certificate");
+                    .map_err(|e| IngressLoadBalancerError::General(Code::CouldNotGenerateCertificate, format!("{:#?}", e).into()))?;
 
                 let certs_vec =
-                    rustls_pemfile::certs(&mut Box::new(&cert.certificate_to_pem()[..])).unwrap();
+                    rustls_pemfile::certs(&mut Box::new(&cert.certificate_to_pem()[..]))
+                    .map_err(|e| IngressLoadBalancerError::General(Code::CouldNotGenerateCertificate, format!("{:#?}", e).into()))?;
                 certs.insert(
                     host.to_string(),
                     cert_key_from(certs_vec, cert.private_key_to_der()),
@@ -384,6 +199,8 @@ impl LetsEncrypt {
             }
             entries
         };
+
+        println!("{:?}", entries);
 
         drop(certs);
 
@@ -420,6 +237,8 @@ impl LetsEncrypt {
                     .expect("Failed to create secret");
             }
         }
+
+        Ok(())
     }
 }
 
@@ -471,5 +290,5 @@ async fn can_convert_account_to_secret_2() {
         .await
         .expect("Expected a valid KUBECONFIG environment variable");
 
-    let _account = LetsEncrypt::get_account(&kube_api).await;
+    let _account = CertGenerator::get_account(&kube_api).await;
 }

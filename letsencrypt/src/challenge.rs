@@ -3,7 +3,7 @@ use serde_json::{json, Map, Value};
 
 use crate::{account::Account, error::LetsEncryptError, order::Identifier};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Http01Challenge {
     pub authorization_endpoint: String,
     pub path: String,

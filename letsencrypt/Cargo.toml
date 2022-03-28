@@ -11,9 +11,9 @@ tokio = { version = "1.16.1", features = ["macros", "rt"] }
 serde_json = "1.0.59"
 serde = { version = "1.0.117", features = ["derive"] }
 hyper-tls = { version = "0.5.0 "}
-# jws = "0.2.6"
 p256 = { version = "0.10.1", features = ["ecdsa-core", "ecdsa"] }
 rand_core = "0.6.3"
+async-trait = "0.1.52"
 rustls = "0.20.3"
 rsa = "0.5.0"
 base64-url = "1.4.10"

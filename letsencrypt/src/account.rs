@@ -1,5 +1,6 @@
-use std::future::Future;
+use std::{sync::Arc};
 
+use async_trait::async_trait;
 use hyper::{Body, Method, Request, Response};
 use openssl::{pkey::{PKey, Private}};
 use p256::ecdsa::SigningKey;
@@ -21,6 +22,11 @@ pub struct Account {
     pub directory: Directory,
 
     pub private_key: PKey<Private>
+}
+
+#[async_trait]
+pub trait ServesChallenge {
+    async fn serve_challenge(self: &Arc<Self>, challenge: Http01Challenge);
 }
 
 async fn send_request<T: Serialize> (
@@ -226,10 +232,7 @@ impl Account {
 
     }
 
-    pub async fn generate_certificate<F, Fut>(&self, domains: &[String], challenge_handler: F) -> Result<Certificate, LetsEncryptError> where
-    F: Fn(Http01Challenge) -> Fut,
-    Fut: Future<Output = ()>
-    {
+    pub async fn generate_certificate<S: ServesChallenge>(&self, domains: &[String], challenge_handler: Arc<S>) -> Result<Certificate, LetsEncryptError> {
         let payload = json!({
             "csr": self.generate_csr(domains).await?
         });

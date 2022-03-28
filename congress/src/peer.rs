@@ -60,6 +60,6 @@ impl<S: Stream> Peer<S> {
 
 impl<S: Stream> Drop for Peer<S> {
     fn drop(&mut self) {
-        println!("Dropping peer with id {} established {}", self.peer_id, self.established_by);
+        println!("Dropping peer with id {} established by {}", self.peer_id, self.established_by);
     }
 }

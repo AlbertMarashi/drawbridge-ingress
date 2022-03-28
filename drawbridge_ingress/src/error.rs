@@ -13,6 +13,7 @@ pub enum Code {
     WebsocketUpgradeError,
     HttpError,
     InternalServerError,
+    CouldNotGenerateCertificate,
     TLSError,
 }
 
@@ -24,6 +25,7 @@ impl std::fmt::Display for Code {
             Code::WebsocketUpgradeError => write!(f, "WebsocketUpgradeError"),
             Code::HttpError => write!(f, "HttpError"),
             Code::InternalServerError => write!(f, "InternalServerError"),
+            Code::CouldNotGenerateCertificate => write!(f, "CouldNotGenerateCertificate"),
             Code::TLSError => write!(f, "TLSError"),
         }
     }
