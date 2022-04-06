@@ -91,7 +91,7 @@ pub fn post_new_order(url: &str) -> Response<Body> {
 
 pub fn post_get_order(url: &str) -> Response<Body> {
     const BODY: &str = r#"{
-    "status": "<STATUS>",
+    "status": "valid",
     "expires": "2019-01-09T08:26:43.570360537Z",
     "identifiers": [
         {
@@ -115,7 +115,7 @@ pub fn post_authz(url: &str) -> Response<Body> {
             "type": "dns",
             "value": "acmetest.algesten.se"
         },
-        "status": "pending",
+        "status": "ready",
         "expires": "2019-01-09T08:26:43Z",
         "challenges": [
         {

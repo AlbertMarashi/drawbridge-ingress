@@ -11,10 +11,8 @@ pub enum Code {
     NonExistentHost,
     CouldNotReachBackend,
     WebsocketUpgradeError,
-    HttpError,
     InternalServerError,
     CouldNotGenerateCertificate,
-    TLSError,
 }
 
 impl std::fmt::Display for Code {
@@ -23,10 +21,8 @@ impl std::fmt::Display for Code {
             Code::NonExistentHost => write!(f, "NonExistentHost"),
             Code::CouldNotReachBackend => write!(f, "CouldNotReachBackend"),
             Code::WebsocketUpgradeError => write!(f, "WebsocketUpgradeError"),
-            Code::HttpError => write!(f, "HttpError"),
             Code::InternalServerError => write!(f, "InternalServerError"),
             Code::CouldNotGenerateCertificate => write!(f, "CouldNotGenerateCertificate"),
-            Code::TLSError => write!(f, "TLSError"),
         }
     }
 }

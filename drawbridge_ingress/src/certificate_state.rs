@@ -13,7 +13,7 @@ pub type Path = String;
 
 pub struct CertificateState {
     pub certs: RwLock<HashMap<String, CertKey>>,
-    pub challenges: RwLock<HashMap<(Host, Path), String>>,
+    pub challenges: RwLock<HashMap<(Host, Path), Http01Challenge>>,
 }
 
 impl CertificateState {
@@ -25,9 +25,11 @@ impl CertificateState {
     }
 
     pub async fn apply_challenge(&self, challenge: Http01Challenge) {
-        self.challenges.write().await.insert((challenge.domain, challenge.path), challenge.contents);
+        self.challenges.write().await.insert((challenge.domain.clone(), challenge.path.clone()), challenge.clone());
+        println!("applied challenge on: {}{}", challenge.domain, challenge.path);
     }
 
+    #[inline]
     pub async fn handle_if_challenge(&self, host: &str, path: &str) -> Option<Response<Body>> {
         if let Some(challenge) = self
             .challenges
@@ -35,7 +37,8 @@ impl CertificateState {
             .await
             .get(&(host.to_string(), path.to_string()))
         {
-            return Some(Response::new(Body::from(challenge.clone())));
+            println!("serving incoming challenge on: {}{}", host, path);
+            return Some(Response::new(Body::from(challenge.contents.clone())));
         }
         None
     }

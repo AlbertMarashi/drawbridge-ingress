@@ -56,17 +56,20 @@ async fn main() -> Result<(), IngressLoadBalancerError> {
     routing_table
         .subscribe(Box::new(move |change_type| {
             let leadership_system = leadership_system_clone.clone();
-            match change_type {
-                ChangeType::BackendChanged => {
-                    tokio::task::spawn(leadership_system.handle_change());
+            tokio::task::spawn(async move {
+                let res = match change_type {
+                    ChangeType::BackendChanged => leadership_system.handle_change().await,
+                    ChangeType::PeerAdded { addr, name } if name != get_current_pod_name() => {
+                        leadership_system.add_peer(addr, name).await
+                    }
+                    _ => return
+                };
+
+                match res {
+                    Ok(_) => return,
+                    Err(e) => eprintln!("{}", e),
                 }
-                ChangeType::PeerAdded { addr, name } => if name != get_current_pod_name() {
-                    tokio::task::spawn(leadership_system.add_peer(addr, name));
-                }
-                ChangeType::PeerRemoved { name } => if name != get_current_pod_name() {
-                    tokio::task::spawn(leadership_system.remove_peer(name));
-                }
-            }
+            });
         }))
         .await;
 

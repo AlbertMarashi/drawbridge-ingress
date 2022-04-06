@@ -21,7 +21,7 @@ pub trait RPC<Msg: UserMsg>: Send + Sync + 'static {
     fn our_id(&self) -> NodeID;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Copy)]
 pub enum Role {
     Leader,
     Follower,
@@ -32,8 +32,8 @@ pub enum Role {
 pub struct Senator<Msg: UserMsg, R: RPC<Msg>> {
     pub id: NodeID,
     pub rpc: Arc<R>,
-    pub role: Mutex<Role>,
-    pub term: Mutex<u64>,
+    pub role: RwLock<Role>,
+    pub term: RwLock<u64>,
     pub voted_for: Mutex<Option<NodeID>>,
     pub next_timeout: Mutex<Instant>,
     pub current_leader: Mutex<Option<NodeID>>,
@@ -46,6 +46,7 @@ pub struct Senator<Msg: UserMsg, R: RPC<Msg>> {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Message<UserMsg> {
     pub from: NodeID,
+    pub from_role: Role,
     pub to : NodeID,
     pub term: u64,
     pub msg: MessageType<UserMsg>,
@@ -55,7 +56,7 @@ pub struct Message<UserMsg> {
 pub enum MessageType<UserMsg> {
     LeaderHeartbeat,
     VoteRequest,
-    VoteResponse { vote_granted: bool },
+    VoteGranted,
     Custom(UserMsg)
 }
 #[derive(Debug)]

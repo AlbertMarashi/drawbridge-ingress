@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::{collections::HashMap};
 
 pub const NAMESPACE: &str = "drawbridge-ingress";
-const ENV: Environment = Environment::Staging;
+const ENV: Environment = Environment::Production;
 pub type SecretCerts = Vec<(Host, CertData)>;
 
 #[allow(dead_code)]
@@ -200,9 +200,6 @@ impl CertGenerator {
             entries
         };
 
-        println!("{:?}", entries);
-
-        drop(certs);
 
         let mut data: Secret = serde_json::from_value(json!({
             "apiVersion": "v1",
@@ -212,7 +209,7 @@ impl CertGenerator {
                 "namespace": NAMESPACE,
             },
             "data": {
-                "certs": entries
+                "certs": base64::encode(json!(entries).to_string()),
             }
         }))
         .unwrap();

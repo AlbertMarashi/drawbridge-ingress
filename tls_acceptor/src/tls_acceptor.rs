@@ -29,7 +29,7 @@ impl TlsAcceptor {
                             let result = match LazyConfigAcceptor::new(acceptor, stream).await {
                                 Err(err) => {
                                     eprintln!("tls_acceptor: accept error: {}", err);
-                                    None
+                                    return
                                 }
 
                                 Ok(handshake) => match resolver.resolve_server_config(&handshake.client_hello()).await {
@@ -37,10 +37,10 @@ impl TlsAcceptor {
                                         Ok(stream) => Some(stream),
                                         Err(err) => {
                                             eprintln!("tls_acceptor: handshake error: {}", err);
-                                            None
+                                            return
                                         }
                                     }
-                                    None => None
+                                    None => return
                                 }
                             };
 

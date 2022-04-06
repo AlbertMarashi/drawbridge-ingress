@@ -1,21 +1,29 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: drawbridge-ingress
+  labels:
+    name: drawbridge-ingress
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: drawbridge-ingress-service
+  name: drawbridge-ingress-daemonset
+  namespace: drawbridge-ingress
 spec:
   selector:
     matchLabels:
-      app: drawbridge-ingress-service
+      app: drawbridge-ingress-pod
   template: # PodTemplateSpec
     metadata:
       labels:
-        app: drawbridge-ingress-service
+        app: drawbridge-ingress-pod
     spec: # PodSpec
-      serviceAccountName: drawbridge-ingress-service
+      serviceAccountName: drawbridge-ingress-service-account
+      terminationGracePeriodSeconds: 0 # Terminate the pod immediately
       containers:
-        - name: drawbridge-ingress-service
-          image: 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image
-          # image: ingress-image
+        - name: drawbridge-ingress-pod
+          image: 319923562419.dkr.ecr.ap-southeast-2.amazonaws.com/ingress-image:zQwIvOL
           env:
             - name: CURRENT_POD_NAME
               valueFrom:
@@ -23,21 +31,23 @@ spec:
                   fieldPath: metadata.name
           resources:
             limits:
-              memory: "30Mi"
-              cpu: "0.2"
+              memory: "50Mi"
+              cpu: "0.4"
           ports:
             - containerPort: 80
             - containerPort: 443
+
 ---
 # Custom Ingress Service
 apiVersion: v1
 kind: Service
 metadata:
+  namespace: drawbridge-ingress
   name: drawbridge-ingress-service
 spec:
   type: NodePort
   selector:
-    app: drawbridge-ingress-service
+    app: drawbridge-ingress-pod
   ports:
     - name: http
       nodePort: 30001
@@ -51,57 +61,52 @@ spec:
       targetPort: 443
 ---
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: drawbridge-ingress-service
+  name: drawbridge-ingress-role
 rules:
   - apiGroups:
       - extensions
       - networking.k8s.io
-    resources:
-      - ingresses
-      - pods
-      - services
-      - secrets
-      - ingressclasses
-    verbs:
-      - get
-      - list
-      - watch
-      - create
-  - apiGroups:
       - ""
     resources:
       - ingresses
       - pods
       - services
       - secrets
-      - ingressclasses
     verbs:
       - get
       - list
       - watch
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - update
       - create
 ---
 # we want to create a cluster role binding for the service account
 # that gives the service account the ability to read the ingress
 # resources.
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: drawbridge-ingress-service
+  name: drawbridge-ingress-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: drawbridge-ingress-service
+  name: drawbridge-ingress-role
 subjects:
   - kind: ServiceAccount
-    name: drawbridge-ingress-service
+    name: drawbridge-ingress-service-account
     namespace: drawbridge-ingress
 ---
 # service account for the ingress service
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: drawbridge-ingress-service
+  name: drawbridge-ingress-service-account
   namespace: drawbridge-ingress

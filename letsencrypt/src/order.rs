@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::{
     error::LetsEncryptError,
-    account::{Account, ServesChallenge}, challenge::Http01Challenge,
+    account::{Account, ServesChallenge}, challenge::{Http01Challenge, get_authorisation}, response_debug_string,
 };
 
 
@@ -13,6 +13,28 @@ use crate::{
 pub struct Identifier {
     /// The domain name
     pub value: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OrderResponse {
+    pub status: String,
+    pub authorizations: Vec<String>,
+    pub finalize: String,
+    pub certificate: Option<String>
+}
+
+pub async fn get_order(account: &Account, order_url: &str) -> Result<OrderResponse, LetsEncryptError> {
+    let response = account.send_request(Method::POST, order_url, json!("")).await?;
+
+    let body = hyper::body::to_bytes(response.into_body())
+        .await
+        .map_err(|e| LetsEncryptError::HyperError(e))?
+        .to_vec();
+
+    let response: OrderResponse = serde_json::from_slice(&body)
+        .map_err(|_| LetsEncryptError::CouldNotGetOrder)?;
+
+    Ok(response)
 }
 
 pub async fn new_order<S: ServesChallenge>(
@@ -29,7 +51,8 @@ pub async fn new_order<S: ServesChallenge>(
         "identifiers": domain_identifiers,
     })).await?;
 
-    if response.status() != 201 {
+    if !response.status().is_success() {
+        eprintln!("{}", response_debug_string(response).await?);
         return Err(LetsEncryptError::CouldNotCreateOrder);
     }
 
@@ -41,67 +64,66 @@ pub async fn new_order<S: ServesChallenge>(
         .unwrap()
         .to_string();
 
-    let body = hyper::body::to_bytes(response.into_body())
-        .await
-        .map_err(|e| LetsEncryptError::HyperError(e))?
-        .to_vec();
+    let order = get_order(&account, &order_url).await?;
 
-    #[derive(Deserialize)]
-    struct OrderResponse {
-        status: String,
-        authorizations: Vec<String>,
-        finalize: String,
+    // if order.status != "pending" && order.status != "ready" {
+    //     println!("{:?}", order);
+    //     return Err(LetsEncryptError::CouldNotCreateOrder);
+    // }
+
+    let mut auths = Vec::new();
+    for authorization in &order.authorizations {
+        auths.push((authorization.clone(), Http01Challenge::new_http_01_challenge(account, &authorization).await?));
     }
 
-    let response: OrderResponse = serde_json::from_slice(&body).map_err(|e| LetsEncryptError::SerdeJSONError(e))?;
+    for (authorization, challenge) in auths {
+        challenge_handler.prepare_challenge(challenge.clone()).await;
+        let response = account.send_request(Method::POST, &challenge.challenge_url, json!({})).await?;
 
-    if response.status != "pending" {
-        return Err(LetsEncryptError::CouldNotCreateOrder);
-    }
-
-    let mut challenges = Vec::new();
-    for authorization in &response.authorizations {
-        challenges.push(Http01Challenge::new_http_01_challenge(account, &authorization).await?);
-    }
-
-    for challenge in challenges {
-        let mut i = 1;
-        challenge_handler.serve_challenge(challenge.clone()).await;
-
-        loop {
-            i += 1;
-            let response = account.send_request(Method::POST, &challenge.finalise_url, json!({})).await?;
-            let err_msg = format!("Could not validate challenge for domain: {} after {} attempts", &challenge.domain, i);
+        if !response.status().is_success() {
+            let err_msg = format!("Could not validate challenge for domain: {}", &challenge.domain);
             let err = LetsEncryptError::CouldNotValidateChallenge(err_msg.clone());
-            if response.status() != 200 {
-                return Err(err);
-            }
 
-            let body = hyper::body::to_bytes(response.into_body())
-                .await
-                .map_err(|e| LetsEncryptError::HyperError(e))?
-                .to_vec();
+            eprintln!("{}", response_debug_string(response).await?);
+            return Err(err);
+        }
 
-            #[derive(Deserialize)]
-            struct ChallengeResponse {
-                status: String,
-            }
+        for i in 1..6 {
+            let authorisation_response = get_authorisation(account, &authorization).await?;
 
-            let response: ChallengeResponse = serde_json::from_slice(&body)
-                .map_err(|_| LetsEncryptError::CouldNotValidateChallenge(err_msg))?;
-
-            if response.status == "pending" {
+            if authorisation_response.status == "pending" {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 continue;
             }
 
-            if response.status == "valid" {
+            if authorisation_response.status == "valid" || authorisation_response.status == "ready" {
                 break;
             }
+
+            dbg!(authorisation_response);
+
+            let err_msg = format!("Could not validate challenge for domain: {} after {} attempts", &challenge.domain, i);
+            let err = LetsEncryptError::CouldNotValidateChallenge(err_msg.clone());
 
             return Err(err);
         }
     }
 
-    Ok((order_url, response.finalize))
+    let order = get_order(&account, &order_url).await?;
+    dbg!(&order);
+
+    return Ok((order_url, order.finalize.clone()));
+    // 5 attempts to check if order is valid
+    // for _ in 0..5 {
+    //     let order = get_order(&account, &order_url).await?;
+
+    //     if order.status == "valid" || order.status == "ready" {
+
+    //     }
+
+    //     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    // }
+
+    // dbg!("Failed to create order");
+    // Err(LetsEncryptError::CouldNotCreateOrder)
 }

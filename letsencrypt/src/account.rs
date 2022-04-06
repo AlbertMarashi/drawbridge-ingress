@@ -1,4 +1,4 @@
-use std::{sync::Arc};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use hyper::{Body, Method, Request, Response};
@@ -12,7 +12,7 @@ use crate::{
     error::LetsEncryptError,
     jwt::{generate_es256_key, get_jwt, JWSProtected, ESJWK, JwkThumbprint},
     nonce::get_nonce,
-    request::get_client, challenge::Http01Challenge, cert::{create_rsa_key, create_csr, Certificate}, order::new_order,
+    request::get_client, challenge::Http01Challenge, cert::{create_rsa_key, create_csr, Certificate}, order::{new_order, get_order}, response_debug_string,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct Account {
 
 #[async_trait]
 pub trait ServesChallenge {
-    async fn serve_challenge(self: &Arc<Self>, challenge: Http01Challenge);
+    async fn prepare_challenge(self: &Arc<Self>, challenge: Http01Challenge);
 }
 
 async fn send_request<T: Serialize> (
@@ -151,20 +151,8 @@ impl Account {
         let response = send_request(Method::POST, &directory, &directory.new_account, &es_key, None, payload)
             .await?;
 
-        if response.status() != 200 {
-            let status = response.status();
-            let headers = format!("{:#?}", response.headers());
-            let error = format!("{status} {headers}\n {:#?}", {
-                core::str::from_utf8(
-                    &hyper::body::to_bytes(response.into_body())
-                        .await
-                        .map_err(|e| LetsEncryptError::HyperError(e))?
-                        .to_vec(),
-                )
-                .map_err(|e| LetsEncryptError::Utf8Error(e))?
-            });
-
-            return Err(LetsEncryptError::UnexpectedResponse(error));
+        if !response.status().is_success() {
+            return Err(LetsEncryptError::UnexpectedResponse(response_debug_string(response).await?));
         }
 
         let location = response
@@ -190,7 +178,6 @@ impl Account {
         if response.status != "valid" {
             return Err(LetsEncryptError::CouldNotCreateAccount);
         }
-
 
         Ok(Account {
             es_key: es_key.to_bytes().to_vec(),
@@ -221,60 +208,53 @@ impl Account {
         jwk_thumb.to_key_authorizaiton(token)
     }
 
-    pub(crate) async fn generate_csr(&self, domains: &[String]) -> Result<String, LetsEncryptError> {
+    pub fn generate_csr(&self, domains: &[String]) -> Result<String, LetsEncryptError> {
         let csr = create_csr(&self.private_key, domains)?
-            .to_pem()
-            .map_err(|_| LetsEncryptError::CSRError)?;
-
-        Ok(core::str::from_utf8(&csr)
-            .map_err(|_| LetsEncryptError::CSRError)?
-            .to_string())
+            .to_der()
+            .map_err(|e| LetsEncryptError::CSRError(format!("{:#?}", e)))?;
+        // to der or pem??
+        Ok(base64_url::encode(&csr))
 
     }
 
     pub async fn generate_certificate<S: ServesChallenge>(&self, domains: &[String], challenge_handler: Arc<S>) -> Result<Certificate, LetsEncryptError> {
         let payload = json!({
-            "csr": self.generate_csr(domains).await?
+            "csr": self.generate_csr(domains)?
         });
 
         let (order_url, finalize_url) = new_order(&self, domains, challenge_handler).await?;
 
-        { // finalize the order
-            let response = self.send_request(Method::POST, &finalize_url, payload).await?;
+        let response = self.send_request(Method::POST, &finalize_url, payload).await?;
 
-            if response.status() != 200 {
-                return Err(LetsEncryptError::CouldNotFinaliseOrder);
-            }
-        }
-
-        let cert_url = { // get the certificate url
-            let response = self.send_request(Method::POST, &order_url, json!({})).await?;
-
-            if response.status() != 200 {
-                return Err(LetsEncryptError::CouldNotFinaliseOrder);
-            }
-
-            #[derive(Deserialize)]
-            struct CertificateResponse {
-                certificate: String
-            }
-
-            let body: CertificateResponse = serde_json::from_slice(&hyper::body::to_bytes(response.into_body())
-                .await
-                .map_err(|e| LetsEncryptError::HyperError(e))?
-                .to_vec())
-                .map_err(|e| LetsEncryptError::SerdeJSONError(e))?;
-
-            body.certificate
-        };
-
-        let response = self.send_request(Method::POST, &cert_url, json!({})).await?;
-
-        if response.status() != 200 {
+        if !response.status().is_success() {
+            eprintln!("FinalizeURL: {}", response_debug_string(response).await?);
             return Err(LetsEncryptError::CouldNotFinaliseOrder);
         }
 
-        let cert = hyper::body::to_bytes(response.into_body())
+        let i = 1;
+        let cert_url = loop {
+            if i > 6 {
+                return Err(LetsEncryptError::CouldNotFinaliseOrder);
+            }
+
+            let order = get_order(self, &order_url).await?;
+            dbg!(&order);
+
+            if order.status == "valid" {
+                break order.certificate.ok_or(LetsEncryptError::CouldNotFinaliseOrder)?;
+            }
+
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        };
+
+        let cert_data = self.send_request(Method::POST, &cert_url, json!("")).await?;
+
+        if !cert_data.status().is_success() {
+            eprintln!("GettingCertFailed: {}", response_debug_string(cert_data).await?);
+            return Err(LetsEncryptError::CouldNotFinaliseOrder);
+        }
+
+        let cert = hyper::body::to_bytes(cert_data.into_body())
             .await
             .map_err(|e| LetsEncryptError::HyperError(e))?
             .to_vec();

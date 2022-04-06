@@ -17,6 +17,7 @@
 use std::{sync::Arc, hash::{Hash, Hasher}, collections::{hash_map::DefaultHasher, HashMap}};
 
 use congress::{Senator, RPCNetwork, NodeID, Peer, Role, MessageType};
+use kube::Client;
 use letsencrypt::{account::ServesChallenge, challenge::Http01Challenge};
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpStream, task::JoinHandle, time::Duration, io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex};
@@ -46,7 +47,7 @@ pub struct LeadershipSystem {
 impl LeadershipSystem {
     pub fn new(current_pod_name: String, routing_table: Arc<RoutingTable> ) -> Arc<Self> {
         let rpc = RPCNetwork::new(name_to_hash(&current_pod_name));
-        let senator = IngressSenator::new(Duration::from_secs(10), rpc.clone());
+        let senator = IngressSenator::new(Duration::from_secs(15), rpc.clone());
 
         Arc::new(LeadershipSystem {
             certificate_state: Arc::new(CertificateState::new()),
@@ -77,33 +78,27 @@ impl LeadershipSystem {
 
         let clone = self.clone();
 
+        {
+            // base our certificates on the existing kubernetes state
+            let kube_api = Client::try_default()
+                .await
+                .expect("Expected a valid KUBECONFIG environment variable");
+
+            *self.certificate_state.certs.write().await = CertGenerator::get_certs(&kube_api).await;
+        }
+
         let task = tokio::task::spawn(async move {
             loop {
-                let (mut stream, _) = server.accept()
+                let (stream, _) = server.accept()
                     .await
                     .map_err(|e| IngressLoadBalancerError::Other(format!("{}", e).into()))?;
 
                 let clone = clone.clone();
                 tokio::task::spawn(async move {
-                    let res: Result<(), IngressLoadBalancerError> = try {
-                        // read 8 bytes from the stream
-                        let mut buf = [0u8; 8];
-                        stream.read_exact(&mut buf)
-                            .await
-                            .map_err(|e| IngressLoadBalancerError::Other(format!("Could not read ID from stream {}", e).into()))?;
-
-                        let peer_id = u64::from_be_bytes(buf);
-
-                        clone.rpc.add_peer(Peer::new(peer_id, peer_id, stream))
-                            .await
-                            .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?
-                            .await
-                            .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?
-                            .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?;
-                    };
+                    let res: Result<(), IngressLoadBalancerError> = clone.handle_connection(stream).await;
 
                     if let Err(e) = res {
-                        println!("Peer failed {}", e);
+                        eprintln!("Peer could not be added {}", e);
                     }
                 });
             }
@@ -124,14 +119,13 @@ impl LeadershipSystem {
 
         self.senator.on_message(move |message| {
             let clone = clone.clone();
-            println!("6");
             tokio::task::spawn(async move {
-                dbg!(7, &message);
+                println!("{} received {:?}", clone.current_pod_name, message);
                 match message.msg {
                     MessageType::Custom(custom) => match custom {
                         IngressMessage::ApplyChallenge(challenge) => clone.certificate_state.apply_challenge(challenge).await,
                         IngressMessage::ApplyCerts(certs) => *clone.certificate_state.certs.write().await = certs,
-                        IngressMessage::RequestState if message.term <= *clone.senator.term.lock().await => clone.share_state().await,
+                        IngressMessage::RequestState if message.term <= clone.senator.term.read().await.clone() => clone.share_state().await,
                         _ => return
                     },
                     _ => return
@@ -144,39 +138,60 @@ impl LeadershipSystem {
         Ok(task)
     }
 
+    pub async fn handle_connection(self: Arc<Self>, mut stream: TcpStream) -> Result<(), IngressLoadBalancerError> {
+        // read 8 bytes from the stream for the ID
+        let mut buf = [0u8; 8];
+        stream.read_exact(&mut buf)
+            .await
+            .map_err(|e| IngressLoadBalancerError::Other(format!("Could not read ID from stream {}", e).into()))?;
+
+        let peer_id = u64::from_be_bytes(buf);
+
+        self.rpc.add_peer(Peer::new(peer_id, peer_id, stream))
+            .await
+            .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?;
+
+        Ok(())
+    }
+
     pub async fn share_state(&self) {
-        match *self.senator.role.lock().await {
+        match self.senator.role.read().await.clone() {
             Role::Leader => {
                 self.senator.broadcast_message(MessageType::Custom(IngressMessage::ApplyCerts(self.certificate_state.certs.read().await.clone()))).await;
+                // for each challenge, send a message to the peer
+                for challenge in self.certificate_state.challenges.read().await.values() {
+                    self.senator.broadcast_message(MessageType::Custom(IngressMessage::ApplyChallenge(challenge.clone()))).await;
+                }
             }
             _ => return
         }
     }
 
     pub async fn handle_change(self: Arc<Self>) -> Result<(), IngressLoadBalancerError> {
-        let generator = match *self.senator.role.lock().await {
+        // wait for 2 seconds in case we are just starting up
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let mut cert_generator = self.cert_generator.lock().await;
+
+        match self.senator.role.read().await.clone() {
             Role::Leader => {
-                let mut cert_generator = self.cert_generator.lock().await;
-                match &mut *cert_generator {
-                    Some(generator) => generator.clone(),
-                    opt @ None => {
-                        let cert_generator = CertGenerator::create(self.routing_table.clone(), self.certificate_state.clone()).await;
-                        *opt = Some(cert_generator.clone());
-                        cert_generator
+                match &*cert_generator { // if there is no cert_generator, then we need to create one
+                    Some(..) => {},
+                    None => {
+                        *cert_generator = Some(CertGenerator::create(self.routing_table.clone(), self.certificate_state.clone()).await);
                     }
                 }
             },
-            // if we are a follower, request the state from the leader instead...
-            Role::Follower if *self.senator.term.lock().await != 0 => {
-                return Ok(self.senator.broadcast_message(MessageType::Custom(IngressMessage::RequestState)).await);
-            },
+            Role::Follower => return Ok(self.senator.broadcast_message(MessageType::Custom(IngressMessage::RequestState)).await),
             _ => return Ok(())
         };
 
-        dbg!(9);
+        let generator = cert_generator.as_mut().unwrap();
+
+        println!("Generating new certificates");
         generator.check_for_new_certificates(self.clone()).await?;
-        dbg!(10);
+        println!("Generating new certificates done, sharing state");
         self.share_state().await;
+        println!("Sharing state done");
         Ok(())
     }
 
@@ -187,7 +202,7 @@ impl LeadershipSystem {
     ///
     /// When we connect, we will write 8 bytes to the stream, which is our hashed pod name.
     /// This will be used by the peer to identify who we are
-    pub async fn add_peer(self: Arc<Self>, addr: String, peer_name: String) -> Result<JoinHandle<Result<(), IngressLoadBalancerError>>, IngressLoadBalancerError> {
+    pub async fn add_peer(self: Arc<Self>, addr: String, peer_name: String) -> Result<(), IngressLoadBalancerError> {
         let retry_stategy = FibonacciBackoff::from_millis(100)
             .factor(1)
             .map(jitter)
@@ -208,34 +223,22 @@ impl LeadershipSystem {
 
         dbg!(&self.current_pod_name, &peer_name, name_to_hash(&self.current_pod_name), name_to_hash(&peer_name));
 
-        let task = self.rpc.add_peer(Peer::new(name_to_hash(&self.current_pod_name), name_to_hash(&peer_name), stream))
+        self.rpc.add_peer(Peer::new(name_to_hash(&self.current_pod_name), name_to_hash(&peer_name), stream))
             .await
             .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?;
 
-        Ok(tokio::task::spawn(async move {
-            task
-                .await
-                .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))?
-                .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))
-        }))
-    }
-
-    /// ## Removes a peer from the network
-    pub async fn remove_peer(self: Arc<Self>, peer_name: String) -> Result<(), IngressLoadBalancerError> {
-        self.rpc.remove_peer(name_to_hash(&peer_name))
-            .await
-            .map_err(|e| IngressLoadBalancerError::Other(format!("{:#?}", e).into()))
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl ServesChallenge for LeadershipSystem {
-    async fn serve_challenge(self: &Arc<Self>, challenge: Http01Challenge) {
-        println!("serving challenge for {}", challenge.domain);
+    async fn prepare_challenge(self: &Arc<Self>, challenge: Http01Challenge) {
+        println!("preparing challenge for {}", challenge.domain);
         self.certificate_state.apply_challenge(challenge.clone()).await;
         self.senator.broadcast_message(MessageType::Custom(IngressMessage::ApplyChallenge(challenge))).await;
         // wait a second for the other nodes to apply the challenge
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(6)).await;
     }
 }
 

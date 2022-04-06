@@ -17,8 +17,9 @@ pub enum LetsEncryptError {
     CouldNotValidateChallenge(String),
     CouldNotFinaliseOrder,
     InvalidCertificate,
-    CSRError,
-    PrivateKeyError
+    CSRError(String),
+    PrivateKeyError,
+    CouldNotGetOrder
 }
 
 impl From<hyper::Error> for LetsEncryptError {

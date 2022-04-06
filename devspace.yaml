@@ -1,5 +1,4 @@
 version: v1beta11
-
 # `images` specifies all images that may need to be built for this project
 images:
   ingress-image: # This image is called `frontend` and refers to the frontend directory which has the source code for our frontend container
@@ -15,6 +14,7 @@ images:
 
 deployments:
 - name: ingress-image
+  namespace: drawbridge-ingress
   kubectl:
     manifests:
       - manifest.yaml

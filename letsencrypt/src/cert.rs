@@ -48,9 +48,10 @@ pub(crate) fn create_csr(pkey: &PKey<Private>, domains: &[String]) -> Result<X50
     req_bld
         .sign(pkey, MessageDigest::sha256())
         .expect("csr_sign");
+    let csr = req_bld.build();
 
     // the csr
-    Ok(req_bld.build())
+    Ok(csr)
 }
 
 /// Encapsulated certificate and private key.

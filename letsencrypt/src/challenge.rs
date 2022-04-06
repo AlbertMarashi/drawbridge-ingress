@@ -5,11 +5,30 @@ use crate::{account::Account, error::LetsEncryptError, order::Identifier};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Http01Challenge {
-    pub authorization_endpoint: String,
     pub path: String,
     pub contents: String,
-    pub finalise_url: String,
+    pub challenge_url: String,
     pub domain: String
+}
+#[derive(Deserialize, Debug)]
+pub struct AuthorizationResponse {
+    pub status: String,
+    pub challenges: Vec<Map<String, Value>>,
+    pub identifier: Identifier,
+}
+
+pub async fn get_authorisation(account: &Account, authorization_url: &str) -> Result<AuthorizationResponse, LetsEncryptError> {
+    let response = account.send_request(Method::POST, authorization_url, json!("")).await?;
+
+    let body = hyper::body::to_bytes(response.into_body())
+        .await
+        .map_err(|e| LetsEncryptError::HyperError(e))?
+        .to_vec();
+
+    let response: AuthorizationResponse = serde_json::from_slice(&body)
+        .map_err(|_| LetsEncryptError::CouldNotGetChallenge)?;
+
+    Ok(response)
 }
 
 impl Http01Challenge {
@@ -17,23 +36,9 @@ impl Http01Challenge {
         account: &Account,
         authorization: &str
     ) -> Result<Self, LetsEncryptError> {
-        let response = account.send_request(Method::POST, &authorization, json!("")).await?;
+        let authorization_response = get_authorisation(account, authorization).await?;
 
-        let body = hyper::body::to_bytes(response.into_body())
-            .await
-            .map_err(|e| LetsEncryptError::HyperError(e))?
-            .to_vec();
-
-        #[derive(Deserialize)]
-        struct ChallengeResponse {
-            challenges: Vec<Map<String, Value>>,
-            identifier: Identifier,
-        }
-
-        let response: ChallengeResponse = serde_json::from_slice(&body)
-            .map_err(|_| LetsEncryptError::CouldNotGetChallenge)?;
-
-        let challenge = response.challenges.iter().find(|challenge| {
+        let challenge = authorization_response.challenges.iter().find(|challenge| {
             challenge["type"].as_str() == Some("http-01")
         });
 
@@ -53,11 +58,10 @@ impl Http01Challenge {
         let key_authorization = account.thumbprint(&challenge.token).await?;
 
         Ok(Http01Challenge {
-            authorization_endpoint: authorization.to_string(),
             path: format!("/.well-known/acme-challenge/{}", challenge.token),
-            domain: response.identifier.value,
+            domain: authorization_response.identifier.value,
             contents: key_authorization,
-            finalise_url: challenge.url
+            challenge_url: challenge.url
         })
     }
 }
